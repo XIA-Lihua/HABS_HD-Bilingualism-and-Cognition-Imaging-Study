@@ -1,0 +1,372 @@
+---
+title: "HABS_HD_7_Analysis"
+output: html_document
+date: "2025-07-31"
+---
+
+# Is Bilingualism Protective against Late-life Cognitive decline? Differences in Ethnicity, Gender and Cognitive Domain in Cross-Sectional and Longitudinal Analyses
+
+```{r}
+### download required package
+library(readxl)
+library(readr)
+library(lme4)
+library(lmerTest) 
+library(sjstats)
+library(nlme)
+library(dplyr)
+library(plyr)
+library(pwr)
+library(olsrr)
+library(car)
+library(MatchIt)
+library(ggplot2)
+library(glmmTMB)
+library(tableone)
+library(sjPlot)
+library(aod)
+library(ggeffects) 
+library(effects)
+library(ggplot2)
+library(scales)
+library(effectsize) 
+library(GGally) 
+library(lavaan) 
+library(tableone)
+library(GGally)
+library(corrplot)
+library(pheatmap)
+library(ppcor)
+library(broom)
+library(broom.mixed)
+library(purrr)
+library(tidyr)
+```
+
+
+```{r}
+# setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+HABS_HD_7_Imaging_All<-read.xlsx("HABS_HD_7_Imaging.xlsx")
+Background<-read.xlsx("RP_HD_7_Demographics.xlsx")
+HABS_HD_7_Imaging_cross_sectional<-merge(HABS_HD_7_Imaging_All,Background, by= c("Med_ID","Visit_ID"))
+```
+
+### 1.2.1 EFA for EF Brain measures 
+
+```{r}
+### Select the target cognitive measures  
+HABS_data_z = subset(HABS_HD_7_Imaging_cross_sectional, select=c("01_L_bankssts_thickavg", "01_L_caudalanteriorcingulate_thickavg",
+  "01_L_caudalmiddlefrontal_thickavg", "01_L_cuneus_thickavg",
+  "01_L_entorhinal_thickavg", "01_L_fusiform_thickavg",
+  "01_L_inferiorparietal_thickavg", "01_L_inferiortemporal_thickavg",
+  "01_L_isthmuscingulate_thickavg", "01_L_lateraloccipital_thickavg",
+  "01_L_lateralorbitofrontal_thickavg", "01_L_lingual_thickavg",
+  "01_L_medialorbitofrontal_thickavg", "01_L_middletemporal_thickavg",
+  "01_L_parahippocampal_thickavg", "01_L_paracentral_thickavg",
+  "01_L_parsopercularis_thickavg", "01_L_parsorbitalis_thickavg",
+  "01_L_parstriangularis_thickavg", "01_L_pericalcarine_thickavg",
+  "01_L_postcentral_thickavg", "01_L_posteriorcingulate_thickavg",
+  "01_L_precentral_thickavg", "01_L_precuneus_thickavg",
+  "01_L_rostralanteriorcingulate_thickavg", "01_L_rostralmiddlefrontal_thickavg",
+  "01_L_superiorfrontal_thickavg", "01_L_superiorparietal_thickavg",
+  "01_L_superiortemporal_thickavg", "01_L_supramarginal_thickavg",
+  "01_L_frontalpole_thickavg", "01_L_temporalpole_thickavg",
+  "01_L_transversetemporal_thickavg", "01_L_insula_thickavg",
+  "01_R_bankssts_thickavg", "01_R_caudalanteriorcingulate_thickavg",
+  "01_R_caudalmiddlefrontal_thickavg", "01_R_cuneus_thickavg",
+  "01_R_entorhinal_thickavg", "01_R_fusiform_thickavg",
+  "01_R_inferiorparietal_thickavg", "01_R_inferiortemporal_thickavg",
+  "01_R_isthmuscingulate_thickavg", "01_R_lateraloccipital_thickavg",
+  "01_R_lateralorbitofrontal_thickavg", "01_R_lingual_thickavg",
+  "01_R_medialorbitofrontal_thickavg", "01_R_middletemporal_thickavg",
+  "01_R_parahippocampal_thickavg", "01_R_paracentral_thickavg",
+  "01_R_parsopercularis_thickavg", "01_R_parsorbitalis_thickavg",
+  "01_R_parstriangularis_thickavg", "01_R_pericalcarine_thickavg",
+  "01_R_postcentral_thickavg", "01_R_posteriorcingulate_thickavg",
+  "01_R_precentral_thickavg", "01_R_precuneus_thickavg",
+  "01_R_rostralanteriorcingulate_thickavg", "01_R_rostralmiddlefrontal_thickavg",
+  "01_R_superiorfrontal_thickavg", "01_R_superiorparietal_thickavg",
+  "01_R_superiortemporal_thickavg", "01_R_supramarginal_thickavg",
+  "01_R_frontalpole_thickavg", "01_R_temporalpole_thickavg",
+  "01_R_transversetemporal_thickavg", "01_R_insula_thickavg",'Med_ID','Visit_ID'))
+HABS_data_z$Med_ID<-as.factor(HABS_data_z$Med_ID)
+HABS_data_z$Visit_ID<-as.factor(HABS_data_z$Visit_ID)
+HABS_data_z <- HABS_data_z  # make a copy
+HABS_data_z[sapply(HABS_data_z, is.numeric)] <- scale(HABS_data_z[sapply(HABS_data_z, is.numeric)])
+## create a z-scored dataset for cognitive measures
+efa_data = subset(HABS_data_z, select=c("01_L_bankssts_thickavg", "01_L_caudalanteriorcingulate_thickavg",
+  "01_L_caudalmiddlefrontal_thickavg", "01_L_cuneus_thickavg",
+  "01_L_entorhinal_thickavg", "01_L_fusiform_thickavg",
+  "01_L_inferiorparietal_thickavg", "01_L_inferiortemporal_thickavg",
+  "01_L_isthmuscingulate_thickavg", "01_L_lateraloccipital_thickavg",
+  "01_L_lateralorbitofrontal_thickavg", "01_L_lingual_thickavg",
+  "01_L_medialorbitofrontal_thickavg", "01_L_middletemporal_thickavg",
+  "01_L_parahippocampal_thickavg", "01_L_paracentral_thickavg",
+  "01_L_parsopercularis_thickavg", "01_L_parsorbitalis_thickavg",
+  "01_L_parstriangularis_thickavg", "01_L_pericalcarine_thickavg",
+  "01_L_postcentral_thickavg", "01_L_posteriorcingulate_thickavg",
+  "01_L_precentral_thickavg", "01_L_precuneus_thickavg",
+  "01_L_rostralanteriorcingulate_thickavg", "01_L_rostralmiddlefrontal_thickavg",
+  "01_L_superiorfrontal_thickavg", "01_L_superiorparietal_thickavg",
+  "01_L_superiortemporal_thickavg", "01_L_supramarginal_thickavg",
+  "01_L_frontalpole_thickavg", "01_L_temporalpole_thickavg",
+  "01_L_transversetemporal_thickavg", "01_L_insula_thickavg",
+  "01_R_bankssts_thickavg", "01_R_caudalanteriorcingulate_thickavg",
+  "01_R_caudalmiddlefrontal_thickavg", "01_R_cuneus_thickavg",
+  "01_R_entorhinal_thickavg", "01_R_fusiform_thickavg",
+  "01_R_inferiorparietal_thickavg", "01_R_inferiortemporal_thickavg",
+  "01_R_isthmuscingulate_thickavg", "01_R_lateraloccipital_thickavg",
+  "01_R_lateralorbitofrontal_thickavg", "01_R_lingual_thickavg",
+  "01_R_medialorbitofrontal_thickavg", "01_R_middletemporal_thickavg",
+  "01_R_parahippocampal_thickavg", "01_R_paracentral_thickavg",
+  "01_R_parsopercularis_thickavg", "01_R_parsorbitalis_thickavg",
+  "01_R_parstriangularis_thickavg", "01_R_pericalcarine_thickavg",
+  "01_R_postcentral_thickavg", "01_R_posteriorcingulate_thickavg",
+  "01_R_precentral_thickavg", "01_R_precuneus_thickavg",
+  "01_R_rostralanteriorcingulate_thickavg", "01_R_rostralmiddlefrontal_thickavg",
+  "01_R_superiorfrontal_thickavg", "01_R_superiorparietal_thickavg",
+  "01_R_superiortemporal_thickavg", "01_R_supramarginal_thickavg",
+  "01_R_frontalpole_thickavg", "01_R_temporalpole_thickavg",
+  "01_R_transversetemporal_thickavg", "01_R_insula_thickavg")) 
+efa_data <- data.frame(lapply(efa_data, function(x) as.numeric(as.character(x))))
+```
+
+
+```{r}
+psych::fa.parallel(efa_data, fa = "pc")
+#### Parallel analysis suggests that the number of components =  7 
+
+# Run PCA
+pca_result <- psych::principal(efa_data, nfactors = 7, rotate = "oblimin")
+# View results
+print(pca_result, digits = 2, cutoff = 0.3)
+pca_result$Vaccounted
+```
+
+```{r}
+two_factor_efa_fit = efa(data = efa_data, nfactors=7, missing="fiml", rotation = "oblimin")
+summary(two_factor_efa_fit, fit.measures = TRUE, standardized = TRUE)
+```
+
+```{r}
+### Select the target cognitive measures  
+HABS_data_z = subset(HABS_HD_7_Imaging_cross_sectional, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
+  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
+  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
+  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
+  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
+  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
+  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
+  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
+  "01_L_insula_thickavg","01_R_insula_thickavg","01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
+  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
+  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
+  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
+  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg","01_L_hippocampus","01_R_hippocampus",'Med_ID','Visit_ID'))
+HABS_data_z$Med_ID<-as.factor(HABS_data_z$Med_ID)
+HABS_data_z$Visit_ID<-as.factor(HABS_data_z$Visit_ID)
+HABS_data_z <- HABS_data_z  # make a copy
+HABS_data_z[sapply(HABS_data_z, is.numeric)] <- scale(HABS_data_z[sapply(HABS_data_z, is.numeric)])
+## create a z-scored dataset for cognitive measures
+efa_data = subset(HABS_data_z, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
+  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
+  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
+  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
+  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
+  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
+  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
+  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
+  "01_L_insula_thickavg","01_R_insula_thickavg")) 
+efa_data <- data.frame(lapply(efa_data, function(x) as.numeric(as.character(x))))
+psych::fa.parallel(efa_data, fa = "pc")
+#### Parallel analysis suggests that the number of components =  2 
+
+# Run PCA
+pca_result <- psych::principal(efa_data, nfactors = 2, rotate = "oblimin")
+# View results
+print(pca_result, digits = 2, cutoff = 0.3)
+pca_result$Vaccounted
+
+two_factor_efa_fit = efa(data = efa_data, nfactors=2, missing="fiml", rotation = "oblimin")
+summary(two_factor_efa_fit, fit.measures = TRUE, standardized = TRUE)
+```
+
+
+```{r}
+### Select the target cognitive measures  
+HABS_data_z = subset(HABS_HD_7_Imaging_cross_sectional, select=c( "01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
+  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
+  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
+  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
+  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg",'Med_ID','Visit_ID'))
+HABS_data_z$Med_ID<-as.factor(HABS_data_z$Med_ID)
+HABS_data_z$Visit_ID<-as.factor(HABS_data_z$Visit_ID)
+HABS_data_z <- HABS_data_z  # make a copy
+HABS_data_z[sapply(HABS_data_z, is.numeric)] <- scale(HABS_data_z[sapply(HABS_data_z, is.numeric)])
+## create a z-scored dataset for cognitive measures
+efa_data = subset(HABS_data_z, select=c( "01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
+  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
+  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
+  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
+  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg")) 
+efa_data <- data.frame(lapply(efa_data, function(x) as.numeric(as.character(x))))
+
+
+psych::fa.parallel(efa_data, fa = "pc")
+#### Parallel analysis suggests that the number of components =  2 
+
+# Run PCA
+pca_result <- psych::principal(efa_data, nfactors = 2, rotate = "oblimin")
+# View results
+print(pca_result, digits = 2, cutoff = 0.3)
+pca_result$Vaccounted
+
+two_factor_efa_fit = efa(data = efa_data, nfactors=2, missing="fiml", rotation = "oblimin")
+summary(two_factor_efa_fit, fit.measures = TRUE, standardized = TRUE)
+
+```
+
+
+```{r}
+### Select the target cognitive measures  
+HABS_data_z2 = subset(HABS_HD_7_Imaging_cross_sectional, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
+  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
+  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
+  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
+  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
+  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
+  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
+  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
+  "01_L_insula_thickavg","01_R_insula_thickavg","01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
+  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
+  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
+  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
+  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg",'Med_ID','Visit_ID'))
+HABS_data_z2$Med_ID<-as.factor(HABS_data_z2$Med_ID)
+HABS_data_z2$Visit_ID<-as.factor(HABS_data_z2$Visit_ID)
+HABS_data_z2 <- HABS_data_z2  # make a copy
+HABS_data_z2[sapply(HABS_data_z2, is.numeric)] <- scale(HABS_data_z2[sapply(HABS_data_z2, is.numeric)])
+## create a z-scored dataset for cognitive measures
+efa_data2 = subset(HABS_data_z2, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
+  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
+  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
+  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
+  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
+  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
+  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
+  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
+  "01_L_insula_thickavg","01_R_insula_thickavg","01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
+  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
+  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
+  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
+  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg")) 
+efa_data2 <- data.frame(lapply(efa_data2, function(x) as.numeric(as.character(x))))
+
+psych::fa.parallel(efa_data2, fa = "pc")
+#### Parallel analysis suggests that the number of components =  4 
+
+# Run PCA
+pca_result2 <- psych::principal(efa_data2, nfactors = 4, rotate = "oblimin")
+# View results
+print(pca_result2, digits = 2, cutoff = 0.3)
+pca_result2$Vaccounted
+
+two_factor_efa_fit2 = efa(data = efa_data2, nfactors=4, missing="fiml", rotation = "oblimin")
+summary(two_factor_efa_fit2, fit.measures = TRUE, standardized = TRUE)
+```
+
+
+#### 2 Longitudinal analysis
+```{r}
+HABS_HD_7_Imaging_All<-read.xlsx("HABS_HD_7_Imaging.xlsx")
+Background2<-read.xlsx("RP_HD_7_Demographics.xlsx",2)
+HABS_HD_7_Imaging_longitudinal<-merge(HABS_HD_7_Imaging_All,Background2, by= c("Med_ID","Visit_ID"))
+```
+
+```{r}
+### Select the target cognitive measures  
+HABS_data_z2 = subset(HABS_HD_7_Imaging_longitudinal, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
+  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
+  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
+  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
+  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
+  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
+  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
+  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
+  "01_L_insula_thickavg","01_R_insula_thickavg","01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
+  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
+  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
+  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
+  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg",'Med_ID','Visit_ID'))
+HABS_data_z2$Med_ID<-as.factor(HABS_data_z2$Med_ID)
+HABS_data_z2$Visit_ID<-as.factor(HABS_data_z2$Visit_ID)
+HABS_data_z2 <- HABS_data_z2  # make a copy
+HABS_data_z2[sapply(HABS_data_z2, is.numeric)] <- scale(HABS_data_z2[sapply(HABS_data_z2, is.numeric)])
+## create a z-scored dataset for cognitive measures
+efa_data2 = subset(HABS_data_z2, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
+  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
+  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
+  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
+  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
+  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
+  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
+  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
+  "01_L_insula_thickavg","01_R_insula_thickavg","01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
+  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
+  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
+  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
+  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg")) 
+efa_data2 <- data.frame(lapply(efa_data2, function(x) as.numeric(as.character(x))))
+
+psych::fa.parallel(efa_data2, fa = "pc")
+#### Parallel analysis suggests that the number of components =  4 
+
+# Run PCA
+pca_result2 <- psych::principal(efa_data2, nfactors = 2, rotate = "oblimin")
+# View results
+print(pca_result2, digits = 2, cutoff = 0.3)
+pca_result2$Vaccounted
+
+two_factor_efa_fit2 = efa(data = efa_data2, nfactors=4, missing="fiml", rotation = "oblimin")
+summary(two_factor_efa_fit2, fit.measures = TRUE, standardized = TRUE)
+```
+
+
+
+```{r}
+### Select the target cognitive measures  
+HABS_data_z2 = subset(HABS_HD_7_Imaging_longitudinal, select=c("01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
+  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
+  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
+  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
+  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg",'Med_ID','Visit_ID'))
+HABS_data_z2$Med_ID<-as.factor(HABS_data_z2$Med_ID)
+HABS_data_z2$Visit_ID<-as.factor(HABS_data_z2$Visit_ID)
+HABS_data_z2 <- HABS_data_z2  # make a copy
+HABS_data_z2[sapply(HABS_data_z2, is.numeric)] <- scale(HABS_data_z2[sapply(HABS_data_z2, is.numeric)])
+## create a z-scored dataset for cognitive measures
+efa_data2 = subset(HABS_data_z2, select=c("01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
+  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
+  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
+  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
+  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg")) 
+efa_data2 <- data.frame(lapply(efa_data2, function(x) as.numeric(as.character(x))))
+
+psych::fa.parallel(efa_data2, fa = "pc")
+#### Parallel analysis suggests that the number of components =  2 
+
+# Run PCA
+pca_result2 <- psych::principal(efa_data2, nfactors = 2, rotate = "oblimin")
+# View results
+print(pca_result2, digits = 2, cutoff = 0.3)
+pca_result2$Vaccounted
+
+two_factor_efa_fit2 = efa(data = efa_data2, nfactors=2, missing="fiml", rotation = "oblimin")
+summary(two_factor_efa_fit2, fit.measures = TRUE, standardized = TRUE)
+```
+
+
+
+
+
+
