@@ -41,368 +41,577 @@ library(broom)
 library(broom.mixed)
 library(purrr)
 library(tidyr)
+library(openxlsx)
+library(sjPlot)
 ```
 
 
 ```{r}
-# setwd(dirname(rstudioapi::getSourceEditorContext()$path))
-HABS_HD_7_Imaging_All<-read.xlsx("HABS_HD_7_Imaging.xlsx")
-Background<-read.xlsx("RP_HD_7_Demographics.xlsx")
-HABS_HD_7_Imaging_cross_sectional<-merge(HABS_HD_7_Imaging_All,Background, by= c("Med_ID","Visit_ID"))
+setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+HABS_HD_7_Imaging_cross_sectional<-read.csv("HABS_HD_7_Imaging_cross_sectional.csv")
+HABS_HD_7_Imaging_cross_sectional$Ethnicity <- factor(HABS_HD_7_Imaging_cross_sectional$Ethnicity, levels = c("Hispanic","White","Black")) # so referent is first, ie Hispanic)
+HABS_HD_7_Imaging_cross_sectional$Bilingualism <- factor(HABS_HD_7_Imaging_cross_sectional$Bilingualism, levels = c("Monolingual", "Bilingual"))
+HABS_HD_7_Imaging_cross_sectional$Gender <- factor(HABS_HD_7_Imaging_cross_sectional$Gender, levels = c(0, 1), labels = c("Male", "Female"))
+contrasts(HABS_HD_7_Imaging_cross_sectional$Gender) = c(-1,1)  ### (male:-1; female: 1)
+contrasts(HABS_HD_7_Imaging_cross_sectional$Bilingualism) = c(-1,1) ### (monolingual:-1; bilingual: 1)
+table(HABS_HD_7_Imaging_cross_sectional$Bilingualism,HABS_HD_7_Imaging_cross_sectional$Ethnicity)
+table(HABS_HD_7_Imaging_cross_sectional$Bilingualism,HABS_HD_7_Imaging_cross_sectional$Ethnicity,HABS_HD_7_Imaging_cross_sectional$Gender)
 ```
 
 ### 1.2.1 EFA for EF Brain measures 
 
 ```{r}
 ### Select the all available ROIs 
-HABS_data_z = subset(HABS_HD_7_Imaging_cross_sectional, select=c("01_L_bankssts_thickavg", "01_L_caudalanteriorcingulate_thickavg",
-  "01_L_caudalmiddlefrontal_thickavg", "01_L_cuneus_thickavg",
-  "01_L_entorhinal_thickavg", "01_L_fusiform_thickavg",
-  "01_L_inferiorparietal_thickavg", "01_L_inferiortemporal_thickavg",
-  "01_L_isthmuscingulate_thickavg", "01_L_lateraloccipital_thickavg",
-  "01_L_lateralorbitofrontal_thickavg", "01_L_lingual_thickavg",
-  "01_L_medialorbitofrontal_thickavg", "01_L_middletemporal_thickavg",
-  "01_L_parahippocampal_thickavg", "01_L_paracentral_thickavg",
-  "01_L_parsopercularis_thickavg", "01_L_parsorbitalis_thickavg",
-  "01_L_parstriangularis_thickavg", "01_L_pericalcarine_thickavg",
-  "01_L_postcentral_thickavg", "01_L_posteriorcingulate_thickavg",
-  "01_L_precentral_thickavg", "01_L_precuneus_thickavg",
-  "01_L_rostralanteriorcingulate_thickavg", "01_L_rostralmiddlefrontal_thickavg",
-  "01_L_superiorfrontal_thickavg", "01_L_superiorparietal_thickavg",
-  "01_L_superiortemporal_thickavg", "01_L_supramarginal_thickavg",
-  "01_L_frontalpole_thickavg", "01_L_temporalpole_thickavg",
-  "01_L_transversetemporal_thickavg", "01_L_insula_thickavg",
-  "01_R_bankssts_thickavg", "01_R_caudalanteriorcingulate_thickavg",
-  "01_R_caudalmiddlefrontal_thickavg", "01_R_cuneus_thickavg",
-  "01_R_entorhinal_thickavg", "01_R_fusiform_thickavg",
-  "01_R_inferiorparietal_thickavg", "01_R_inferiortemporal_thickavg",
-  "01_R_isthmuscingulate_thickavg", "01_R_lateraloccipital_thickavg",
-  "01_R_lateralorbitofrontal_thickavg", "01_R_lingual_thickavg",
-  "01_R_medialorbitofrontal_thickavg", "01_R_middletemporal_thickavg",
-  "01_R_parahippocampal_thickavg", "01_R_paracentral_thickavg",
-  "01_R_parsopercularis_thickavg", "01_R_parsorbitalis_thickavg",
-  "01_R_parstriangularis_thickavg", "01_R_pericalcarine_thickavg",
-  "01_R_postcentral_thickavg", "01_R_posteriorcingulate_thickavg",
-  "01_R_precentral_thickavg", "01_R_precuneus_thickavg",
-  "01_R_rostralanteriorcingulate_thickavg", "01_R_rostralmiddlefrontal_thickavg",
-  "01_R_superiorfrontal_thickavg", "01_R_superiorparietal_thickavg",
-  "01_R_superiortemporal_thickavg", "01_R_supramarginal_thickavg",
-  "01_R_frontalpole_thickavg", "01_R_temporalpole_thickavg",
-  "01_R_transversetemporal_thickavg", "01_R_insula_thickavg",'Med_ID','Visit_ID'))
+HABS_data_z = subset(HABS_HD_7_Imaging_cross_sectional, select=c("L_bankssts_thickavg", "L_caudalanteriorcingulate_thickavg",
+  "L_caudalmiddlefrontal_thickavg", "L_cuneus_thickavg",
+  "L_entorhinal_thickavg", "L_fusiform_thickavg",
+  "L_inferiorparietal_thickavg", "L_inferiortemporal_thickavg",
+  "L_isthmuscingulate_thickavg", "L_lateraloccipital_thickavg",
+  "L_lateralorbitofrontal_thickavg", "L_lingual_thickavg",
+  "L_medialorbitofrontal_thickavg", "L_middletemporal_thickavg",
+  "L_parahippocampal_thickavg", "L_paracentral_thickavg",
+  "L_parsopercularis_thickavg", "L_parsorbitalis_thickavg",
+  "L_parstriangularis_thickavg", "L_pericalcarine_thickavg",
+  "L_postcentral_thickavg", "L_posteriorcingulate_thickavg",
+  "L_precentral_thickavg", "L_precuneus_thickavg",
+  "L_rostralanteriorcingulate_thickavg", "L_rostralmiddlefrontal_thickavg",
+  "L_superiorfrontal_thickavg", "L_superiorparietal_thickavg",
+  "L_superiortemporal_thickavg", "L_supramarginal_thickavg",
+  "L_frontalpole_thickavg", "L_temporalpole_thickavg",
+  "L_transversetemporal_thickavg", "L_insula_thickavg",
+  "R_bankssts_thickavg", "R_caudalanteriorcingulate_thickavg",
+  "R_caudalmiddlefrontal_thickavg", "R_cuneus_thickavg",
+  "R_entorhinal_thickavg", "R_fusiform_thickavg",
+  "R_inferiorparietal_thickavg", "R_inferiortemporal_thickavg",
+  "R_isthmuscingulate_thickavg", "R_lateraloccipital_thickavg",
+  "R_lateralorbitofrontal_thickavg", "R_lingual_thickavg",
+  "R_medialorbitofrontal_thickavg", "R_middletemporal_thickavg",
+  "R_parahippocampal_thickavg", "R_paracentral_thickavg",
+  "R_parsopercularis_thickavg", "R_parsorbitalis_thickavg",
+  "R_parstriangularis_thickavg", "R_pericalcarine_thickavg",
+  "R_postcentral_thickavg", "R_posteriorcingulate_thickavg",
+  "R_precentral_thickavg", "R_precuneus_thickavg",
+  "R_rostralanteriorcingulate_thickavg", "R_rostralmiddlefrontal_thickavg",
+  "R_superiorfrontal_thickavg", "R_superiorparietal_thickavg",
+  "R_superiortemporal_thickavg", "R_supramarginal_thickavg",
+  "R_frontalpole_thickavg", "R_temporalpole_thickavg",
+  "R_transversetemporal_thickavg", "R_insula_thickavg",'Med_ID','Visit_ID'))
 HABS_data_z$Med_ID<-as.factor(HABS_data_z$Med_ID)
 HABS_data_z$Visit_ID<-as.factor(HABS_data_z$Visit_ID)
-HABS_data_z <- HABS_data_z  # make a copy
-HABS_data_z[sapply(HABS_data_z, is.numeric)] <- scale(HABS_data_z[sapply(HABS_data_z, is.numeric)])
-## create a z-scored dataset for cognitive measures
-efa_data_all = subset(HABS_data_z, select=c("01_L_bankssts_thickavg", "01_L_caudalanteriorcingulate_thickavg",
-  "01_L_caudalmiddlefrontal_thickavg", "01_L_cuneus_thickavg",
-  "01_L_entorhinal_thickavg", "01_L_fusiform_thickavg",
-  "01_L_inferiorparietal_thickavg", "01_L_inferiortemporal_thickavg",
-  "01_L_isthmuscingulate_thickavg", "01_L_lateraloccipital_thickavg",
-  "01_L_lateralorbitofrontal_thickavg", "01_L_lingual_thickavg",
-  "01_L_medialorbitofrontal_thickavg", "01_L_middletemporal_thickavg",
-  "01_L_parahippocampal_thickavg", "01_L_paracentral_thickavg",
-  "01_L_parsopercularis_thickavg", "01_L_parsorbitalis_thickavg",
-  "01_L_parstriangularis_thickavg", "01_L_pericalcarine_thickavg",
-  "01_L_postcentral_thickavg", "01_L_posteriorcingulate_thickavg",
-  "01_L_precentral_thickavg", "01_L_precuneus_thickavg",
-  "01_L_rostralanteriorcingulate_thickavg", "01_L_rostralmiddlefrontal_thickavg",
-  "01_L_superiorfrontal_thickavg", "01_L_superiorparietal_thickavg",
-  "01_L_superiortemporal_thickavg", "01_L_supramarginal_thickavg",
-  "01_L_frontalpole_thickavg", "01_L_temporalpole_thickavg",
-  "01_L_transversetemporal_thickavg", "01_L_insula_thickavg",
-  "01_R_bankssts_thickavg", "01_R_caudalanteriorcingulate_thickavg",
-  "01_R_caudalmiddlefrontal_thickavg", "01_R_cuneus_thickavg",
-  "01_R_entorhinal_thickavg", "01_R_fusiform_thickavg",
-  "01_R_inferiorparietal_thickavg", "01_R_inferiortemporal_thickavg",
-  "01_R_isthmuscingulate_thickavg", "01_R_lateraloccipital_thickavg",
-  "01_R_lateralorbitofrontal_thickavg", "01_R_lingual_thickavg",
-  "01_R_medialorbitofrontal_thickavg", "01_R_middletemporal_thickavg",
-  "01_R_parahippocampal_thickavg", "01_R_paracentral_thickavg",
-  "01_R_parsopercularis_thickavg", "01_R_parsorbitalis_thickavg",
-  "01_R_parstriangularis_thickavg", "01_R_pericalcarine_thickavg",
-  "01_R_postcentral_thickavg", "01_R_posteriorcingulate_thickavg",
-  "01_R_precentral_thickavg", "01_R_precuneus_thickavg",
-  "01_R_rostralanteriorcingulate_thickavg", "01_R_rostralmiddlefrontal_thickavg",
-  "01_R_superiorfrontal_thickavg", "01_R_superiorparietal_thickavg",
-  "01_R_superiortemporal_thickavg", "01_R_supramarginal_thickavg",
-  "01_R_frontalpole_thickavg", "01_R_temporalpole_thickavg",
-  "01_R_transversetemporal_thickavg", "01_R_insula_thickavg")) 
-efa_data_all <- data.frame(lapply(efa_data_all, function(x) as.numeric(as.character(x))))
+id_vars <- HABS_data_z[, c("Med_ID", "Visit_ID")]
+efa_data_all <- HABS_data_z[, !(names(HABS_data_z) %in% c("Med_ID", "Visit_ID"))]
+
+efa_data_all_numeric <- as.data.frame(lapply(efa_data_all, function(x) as.numeric(as.character(x))))
+
+# Safely z-score only numeric columns
+efa_data_all_z <- as.data.frame(scale(efa_data_all_numeric, center = TRUE, scale = TRUE))
 ```
 
 ```{r}
-psych::fa.parallel(efa_data_all, fa = "pc")
+psych::fa.parallel(efa_data_all_z, fa = "pc")
 #### Parallel analysis suggests that the number of components =  7 
 
-# Run PCA
-pca_result <- psych::principal(efa_data_all, nfactors = 7, rotate = "oblimin")
-# View results
-print(pca_result, digits = 2, cutoff = 0.3)
-pca_result$Vaccounted
+fa_result_TC1 <- psych::principal(efa_data_all_z, nfactors = 1, rotate = "none", scores = TRUE)
+
+#  Extract the 1st component (composite) scores
+efa_data_all_z$CorticalComposite <- fa_result_TC1$scores[, 1]
+
+#  Extract the 1st component (composite) scores
+pca_result_7 <- psych::principal(efa_data_all_z, nfactors = 7, rotate = "oblimin")
+efa_data_all_z$CorticalComposite2 <- pca_result_7$scores[, 1]
+
+#  Create a dataframe with IDs and the composite score
+predicted_scores_df <- data.frame(
+  Med_ID = id_vars$Med_ID,
+  Visit_ID = id_vars$Visit_ID,
+  CorticalComposite = efa_data_all_z$CorticalComposite,
+   CorticalComposite2 = efa_data_all_z$CorticalComposite2
+)
+
+# Step 4: Merge back into the main dataset
+HABS_HD_7_Imaging_cross_sectional <- merge(
+  HABS_HD_7_Imaging_cross_sectional,
+  predicted_scores_df,
+  by = c("Med_ID", "Visit_ID"),
+  all.x = TRUE
+)
+
+```
+
+
+
+```{r}
+a1<-lm(Overall_thickness ~ Bilingualism * poly(Age,2)* Gender * Ethnicity + EducationYears, data = HABS_HD_7_Imaging_cross_sectional)
+car::Anova(a1)
+eta_squared(a1)
+effectsize(a1)
 ```
 
 ```{r}
-seven_factor_efa_fit = efa(data = efa_data_all, nfactors=7, missing="fiml", rotation = "oblimin")
-summary(seven_factor_efa_fit, fit.measures = TRUE, standardized = TRUE)
+a1<-lm(CorticalComposite ~ Bilingualism * poly(Age,2)* Gender * Ethnicity + EducationYears, data = HABS_HD_7_Imaging_cross_sectional)
+car::Anova(a1)
+eta_squared(a1)
+effectsize(a1)
 ```
 
 ```{r}
-### Select the EF_realted ROIs 
-HABS_data_z = subset(HABS_HD_7_Imaging_cross_sectional, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
-  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
-  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
-  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
-  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
-  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
-  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
-  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
-  "01_L_insula_thickavg","01_R_insula_thickavg",'Med_ID','Visit_ID'))
-HABS_data_z$Med_ID<-as.factor(HABS_data_z$Med_ID)
-HABS_data_z$Visit_ID<-as.factor(HABS_data_z$Visit_ID)
-HABS_data_z <- HABS_data_z  # make a copy
-HABS_data_z[sapply(HABS_data_z, is.numeric)] <- scale(HABS_data_z[sapply(HABS_data_z, is.numeric)])
-## create a z-scored dataset for cognitive measures
-efa_data_EF = subset(HABS_data_z, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
-  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
-  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
-  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
-  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
-  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
-  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
-  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
-  "01_L_insula_thickavg","01_R_insula_thickavg")) 
-efa_data_EF <- data.frame(lapply(efa_data_EF, function(x) as.numeric(as.character(x))))
-psych::fa.parallel(efa_data_EF, fa = "pc")
-#### Parallel analysis suggests that the number of components =  2 
-```
-```{r}
-# Run PCA
-pca_result <- psych::principal(efa_data_EF, nfactors = 2, rotate = "oblimin")
-# View results
-print(pca_result, digits = 2, cutoff = 0.3)
-pca_result$Vaccounted
-```
-```{r}
-two_factor_efa_fit = efa(data = efa_data_EF, nfactors=2, missing="fiml", rotation = "oblimin")
-summary(two_factor_efa_fit, fit.measures = TRUE, standardized = TRUE)
+a1<-lm(CorticalComposite2 ~ Bilingualism * poly(Age,2)* Gender * Ethnicity + EducationYears, data = HABS_HD_7_Imaging_cross_sectional)
+car::Anova(a1)
+eta_squared(a1)
+effectsize(a1)
 ```
 
 ```{r}
-### Select the memory-related ROIs 
-HABS_data_z = subset(HABS_HD_7_Imaging_cross_sectional, select=c( "01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
-  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
-  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
-  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
-  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg",'Med_ID','Visit_ID'))
-HABS_data_z$Med_ID<-as.factor(HABS_data_z$Med_ID)
-HABS_data_z$Visit_ID<-as.factor(HABS_data_z$Visit_ID)
-HABS_data_z <- HABS_data_z  # make a copy
-HABS_data_z[sapply(HABS_data_z, is.numeric)] <- scale(HABS_data_z[sapply(HABS_data_z, is.numeric)])
-## create a z-scored dataset for cognitive measures
-efa_data_memory = subset(HABS_data_z, select=c( "01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
-  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
-  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
-  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
-  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg")) 
-efa_data_memory <- data.frame(lapply(efa_data_memory, function(x) as.numeric(as.character(x))))
-psych::fa.parallel(efa_data_memory, fa = "pc")
-#### Parallel analysis suggests that the number of components =  2 
-```
-```{r}
-# Run PCA
-pca_result <- psych::principal(efa_data_memory, nfactors = 2, rotate = "oblimin")
-# View results
-print(pca_result, digits = 2, cutoff = 0.3)
-pca_result$Vaccounted
-```
-```{r}
-two_factor_efa_fit = efa(data = efa_data_memory, nfactors=2, missing="fiml", rotation = "oblimin")
-summary(two_factor_efa_fit, fit.measures = TRUE, standardized = TRUE)
+a1<-lm(CorticalComposite2 ~ Bilingualism * poly(Age,2)* Gender + EducationYears, data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity =="Hispanic") )
+car::Anova(a1)
 ```
 
 ```{r}
-### combined EF+ Memory ROIs
-HABS_data_z2 = subset(HABS_HD_7_Imaging_cross_sectional, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
-  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
-  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
-  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
-  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
-  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
-  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
-  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
-  "01_L_insula_thickavg","01_R_insula_thickavg","01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
-  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
-  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
-  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
-  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg",'Med_ID','Visit_ID'))
-HABS_data_z2$Med_ID<-as.factor(HABS_data_z2$Med_ID)
-HABS_data_z2$Visit_ID<-as.factor(HABS_data_z2$Visit_ID)
-HABS_data_z2 <- HABS_data_z2  # make a copy
-HABS_data_z2[sapply(HABS_data_z2, is.numeric)] <- scale(HABS_data_z2[sapply(HABS_data_z2, is.numeric)])
-## create a z-scored dataset for cognitive measures
-efa_data2 = subset(HABS_data_z2, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
-  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
-  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
-  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
-  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
-  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
-  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
-  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
-  "01_L_insula_thickavg","01_R_insula_thickavg","01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
-  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
-  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
-  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
-  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg")) 
-efa_data2 <- data.frame(lapply(efa_data2, function(x) as.numeric(as.character(x))))
-
-psych::fa.parallel(efa_data2, fa = "pc")
-#### Parallel analysis suggests that the number of components =  4 
-
-# Run PCA
-pca_result2 <- psych::principal(efa_data2, nfactors = 4, rotate = "oblimin")
-# View results
-print(pca_result2, digits = 2, cutoff = 0.3)
-pca_result2$Vaccounted
-
-two_factor_efa_fit2 = efa(data = efa_data2, nfactors=4, missing="fiml", rotation = "oblimin")
-summary(two_factor_efa_fit2, fit.measures = TRUE, standardized = TRUE)
+a1<-lm(CorticalComposite2 ~ Bilingualism * poly(Age,2)* Gender + EducationYears, data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity =="Black") )
+car::Anova(a1)
 ```
+
+```{r}
+a1<-lm(CorticalComposite2 ~ Bilingualism * poly(Age,2)* Gender + EducationYears, data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity =="White") )
+car::Anova(a1)
+```
+
+```{r}
+a2<-lm(bi_hippocampus ~ Bilingualism * poly(Age,2)* Gender * Ethnicity + EducationYears, data = HABS_HD_7_Imaging_cross_sectional)
+car::Anova(a2)
+eta_squared(a2)
+effectsize(a2)
+```
+
+When the 3-way Interaction breakdown by ethnicity
+
+```{r}
+###analysis in Hispanic
+model_H <- lm(bi_hippocampus ~ Bilingualism * Gender + poly(Age,2) + EducationYears, data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity=='Hispanic'))
+car::Anova(model_H) 
+eta_squared(model_H)
+effectsize(model_H)
+```
+
+```{r}
+### Analysis in Hispanic females
+model_HF <- lm(bi_hippocampus ~ Bilingualism + poly(Age,2) +  EducationYears, data = subset(HABS_HD_7_Imaging_cross_sectional,   Ethnicity=='Hispanic'& Gender =='Female' ))
+car::Anova(model_HF)  
+effectsize(model_HF)
+eta_squared(model_HF)
+```
+
+```{r}
+### Analysis in Hispanic males
+model_HM <- lm(bi_hippocampus ~ Bilingualism + poly(Age,2) +  EducationYears, data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity=='Hispanic'& Gender =='Male'))
+car::Anova(model_HM) 
+effectsize(model_HM)
+eta_squared(model_HM)
+```
+
+```{r}
+##analysis in Black
+model_B <- lm(bi_hippocampus ~ Bilingualism * Gender + poly(Age,2) + EducationYears, data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity=='Black'))
+car::Anova(model_B) 
+summary(model_B)
+effectsize(model_B)
+eta_squared(model_B)
+```
+
+
+```{r}
+### analysis in White
+model_W <- lm(bi_hippocampus ~ Bilingualism * Gender + poly(Age,2) + EducationYears, data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity=='White'))
+car::Anova(model_W)  
+effectsize(model_W)
+eta_squared(model_W)
+```
+
+Function for plotting bar graphs
+```{r}
+fot.fun <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE, id=NULL) {
+  library(plyr)
+  # New version of length which can handle NA's: if na.rm==T, don't count them
+  length2 <- function (x, na.rm=FALSE) {
+    if (na.rm) sum(!is.na(x))
+    else       length(x)}
+  # This does the effectsize. For each group's data frame, return a vector with
+  # N, mean, and sd
+  if(is.null(id)){
+    datac <- ddply(data, groupvars, .drop=.drop,
+                   .fun = function(xx, col) {
+                     c(N    = length2(xx[[col]], na.rm=na.rm),
+                       mean = mean   (xx[[col]], na.rm=na.rm),
+                       median = median (xx[[col]], na.rm=na.rm),
+                       sum = sum (xx[[col]], na.rm=na.rm),
+                       sd   = sd     (xx[[col]], na.rm=na.rm)  )},
+                   measurevar  ) }
+  else {
+    datac <- ddply(data, groupvars, .drop=.drop,
+                   .fun = function(xx, col) {
+                     c(id = id,
+                       N    = length2(xx[[col]], na.rm=na.rm),
+                       mean = mean   (xx[[col]], na.rm=na.rm),
+                       median = median (xx[[col]], na.rm=na.rm),
+                       sum = sum (xx[[col]], na.rm=na.rm),
+                       sd   = sd     (xx[[col]], na.rm=na.rm)
+                     ) }, measurevar  )
+    datac<-datac[,c(3,1,2,4,5,6,7,8)]  }
+  # Rename the "mean" column    
+  datac <- reshape:::rename(datac, c("mean" = measurevar))
+  
+  datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+  
+  # Confidence interval multiplier for standard error
+  # Calculate t-statistic for confidence interval: 
+  # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+  ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+  datac$ci <- datac$se * ciMult
+  return(datac)
+}
+```
+
+```{r}
+HABS_HD_cross_sectional_cleaned<-filter(HABS_HD_7_Imaging_cross_sectional, !is.na(bi_hippocampus))
+plot_data  <- fot.fun(data=HABS_HD_cross_sectional_cleaned, "bi_hippocampus", c("Bilingualism","Ethnicity","Gender"))
+
+plot_data$Ethnicity <- factor(plot_data$Ethnicity,
+                                        levels = c("Hispanic", "Black", "White"))
+ggplot(plot_data, aes(x = Gender, y = bi_hippocampus, fill = Bilingualism)) +
+  geom_col(position = position_dodge(0.9), width = 0.7) +
+  geom_errorbar(aes(ymin = bi_hippocampus - se, ymax = bi_hippocampus + se),
+                width = 0.2,
+                position = position_dodge(0.9)) +
+  facet_wrap(~Ethnicity) +
+  ylab("bi_hippocampus") +
+  xlab("Gender") +
+  ggtitle("Bi_hippocampus by Bilingualism Across Ethnic and Gender Groups") +
+  scale_fill_brewer(palette = "Set1") +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, family = "serif"),
+    legend.position = "top",
+    legend.title = element_text(size = 14, family = "serif"),
+    legend.text = element_text(size = 14, family = "serif"),
+    axis.title.x = element_text(size = 14, family = "serif"),
+    axis.title.y = element_text(size = 14, family = "serif"),
+    axis.text.x = element_text(size = 13, family = "serif"),  
+    axis.text.y = element_text(size = 13, family = "serif"),
+    strip.text = element_text(size = 13, family = "serif")
+  ) 
+```
+
+```{r}
+a1<-lm(BAG_R ~ Bilingualism * poly(Age,2)* Gender * Ethnicity + EducationYears, data = HABS_HD_7_Imaging_cross_sectional)
+car::Anova(a1)
+eta_squared(a1)
+effectsize(a1)
+```
+
+```{r}
+a1<-lm(BAG_DeepBrainNet ~ Bilingualism * poly(Age,2)* Gender * Ethnicity + EducationYears, data = HABS_HD_7_Imaging_cross_sectional)
+car::Anova(a1)
+eta_squared(a1)
+effectsize(a1)
+```
+
+
+```{r}
+library(MASS)
+HABS_HD_7_Imaging_cross_sectional$WMH_Scale <- 
+  factor(HABS_HD_7_Imaging_cross_sectional$WMH_Scale,
+         levels = c(0, 1, 2, 3),   
+         ordered = TRUE)
+
+table(HABS_HD_7_Imaging_cross_sectional$WMH_Scale,HABS_HD_7_Imaging_cross_sectional$Bilingualism,HABS_HD_7_Imaging_cross_sectional$Gender)
+
+model_wmh <- polr(
+  WMH_Scale ~ Bilingualism * Age * Gender *Ethnicity +  EducationYears,
+  data = HABS_HD_7_Imaging_cross_sectional,
+  Hess = TRUE
+)
+car::Anova(model_wmh)
+summary(model_wmh)
+(ctable <- coef(summary(model_wmh)))
+p_values <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+(ctable <- cbind(ctable, "p value" = p_values))
+```
+
+
+```{r}
+model_wmh_H <- polr(
+  WMH_Scale ~ Bilingualism  * Gender  + Age +   EducationYears,
+  data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity =="Hispanic"),
+  Hess = TRUE
+)
+car::Anova(model_wmh_H)
+summary(model_wmh_H)
+```
+```{r}
+model_wmh_HF <- polr(
+  WMH_Scale ~ Bilingualism   + Age +   EducationYears,
+  data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity =="Hispanic" & Gender=="Female"),
+  Hess = TRUE
+)
+car::Anova(model_wmh_HF)
+summary(model_wmh_HF)
+```
+
+```{r}
+model_wmh_HM <- polr(
+  WMH_Scale ~ Bilingualism + Age +   EducationYears,
+  data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity =="Hispanic" & Gender=="Male"),
+  Hess = TRUE
+)
+car::Anova(model_wmh_HM)
+summary(model_wmh_HM)
+```
+
+```{r}
+model_wmh_B <- polr(
+  WMH_Scale ~ Bilingualism  * Gender  + Age +   EducationYears,
+  data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity =="Black"),
+  Hess = TRUE
+)
+car::Anova(model_wmh_B)
+summary(model_wmh_B)
+```
+
+```{r}
+model_wmh_W <- polr(
+  WMH_Scale ~ Bilingualism  * Gender  + Age +   EducationYears,
+  data = subset(HABS_HD_7_Imaging_cross_sectional, Ethnicity =="White"),
+  Hess = TRUE
+)
+car::Anova(model_wmh_W)
+summary(model_wmh_W)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Make sure WMH_Scale is an ordered factor
+HABS_HD_7_Imaging_cross_sectional$WMH_Scale <- factor(
+  HABS_HD_7_Imaging_cross_sectional$WMH_Scale,
+  levels = c(0, 1, 2, 3), 
+  ordered = TRUE
+)
+
+HABS_HD_7_Imaging_cross_sectional_cleaned<-subset(HABS_HD_7_Imaging_cross_sectional, !is.na(WMH_Scale))
+# Summarize counts
+counts_df <- HABS_HD_7_Imaging_cross_sectional_cleaned %>%
+  group_by(Bilingualism, Gender, Ethnicity, WMH_Scale) %>%
+  tally(name = "n")
+
+# Plot stacked bar chart
+ggplot(counts_df, aes(x = Bilingualism, y = n, fill = WMH_Scale)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_grid(Gender ~ Ethnicity) +
+  scale_fill_brewer(palette = "Set2", name = "WMH Severity") +
+  labs(
+    x = "Bilingualism",
+    y = "Count",
+    title = "Counts of WMH Severity by Bilingualism, Gender, and Ethnicity"
+  ) +
+  coord_cartesian(ylim = c(0, 500)) + 
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "top",
+    strip.text = element_text(face = "bold", size = 12)
+  )
+
+```
+```{r}
+library(tidyverse)
+
+# Remove missing values
+wmh_df <- HABS_HD_7_Imaging_cross_sectional %>%
+  filter(!is.na(WMH_Scale), !is.na(Bilingualism), !is.na(Gender), !is.na(Ethnicity))
+
+# Count per combination using count()
+wmh_counts <- wmh_df %>%
+  dplyr::count(Ethnicity, Gender, Bilingualism, WMH_Scale)
+
+# Compute proportion within Bilingualism × Gender × Ethnicity
+wmh_prop <- wmh_counts %>%
+  group_by(Ethnicity, Gender, Bilingualism) %>%
+  mutate(
+    Proportion = n / sum(n),
+    cum_proportion = cumsum(Proportion) - Proportion / 2  # for label positioning
+  ) %>%
+  ungroup()
+# Make sure WMH_Scale is an ordered factor
+wmh_prop$WMH_Scale <- factor(
+  wmh_prop$WMH_Scale,
+  levels = c(3, 2, 1, 0),  # new order
+  ordered = TRUE
+)
+# Plot
+ggplot(wmh_prop, aes(x = factor(Bilingualism), y = Proportion, fill = factor(WMH_Scale))) +
+  geom_bar(stat = "identity", position = "fill", color = "black") +
+  #geom_text(aes(label = scales::percent(Proportion, accuracy = 1), y = cum_proportion),
+           # position = position_fill(vjust = 0.5), size = 3.5, color = "black") +
+  facet_grid(rows = vars(Gender), cols = vars(Ethnicity)) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  scale_fill_brewer(palette = "Pastel2", direction = -1, name = "WMH Scale") +
+  labs(
+    x = "Bilingualism",
+    y = "Proportion (%)",
+    title = "Proportion of WMH_Scale Levels by Bilingualism and Gender across Ethnicities"
+  ) +
+  theme_bw(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    legend.position = "right",
+    strip.text = element_text(size = 13),
+    axis.title = element_text(size = 13),
+    axis.text = element_text(size = 12)
+  )
+
+
+
+```
+
 
 
 #### 2 Longitudinal analysis
 ```{r}
-HABS_HD_7_Imaging_All<-read.xlsx("HABS_HD_7_Imaging.xlsx")
-Background2<-read.xlsx("RP_HD_7_Demographics.xlsx",2)
-HABS_HD_7_Imaging_longitudinal<-merge(HABS_HD_7_Imaging_All,Background2, by= c("Med_ID","Visit_ID"))
+HABS_HD_7_Imaging_longitudinal <- read.csv("HABS_HD_7_Imaging_longitudinal.csv")
+HABS_HD_7_Imaging_longitudinal$Bilingualism <- factor(HABS_HD_7_Imaging_longitudinal$Bilingualism, levels = c("Monolingual", "Bilingual"))
+HABS_HD_7_Imaging_longitudinal$Gender <- factor(HABS_HD_7_Imaging_longitudinal$Gender, levels = c("Male", "Female"))
+
+contrasts(HABS_HD_7_Imaging_longitudinal$Gender) = c(-1,1)  ### (male:-1; female: 1)
+contrasts(HABS_HD_7_Imaging_longitudinal$Bilingualism) = c(-1,1) ### (monolingual:-1; bilingual: 1)
+
+###Z-scores
+HABS_HD_7_Imaging_longitudinal$A0<- scale(HABS_HD_7_Imaging_longitudinal$A0,center = TRUE,scale = TRUE)
+HABS_HD_7_Imaging_longitudinal$EducationYears<- scale(HABS_HD_7_Imaging_longitudinal$EducationYears,center = TRUE,scale = TRUE)
+table(HABS_HD_7_Imaging_longitudinal$Bilingualism,HABS_HD_7_Imaging_longitudinal$Ethnicity,HABS_HD_7_Imaging_longitudinal$Gender) 
 ```
 
 
-```{r}
-### Select the EF_realted ROIs 
-HABS_data_z = subset(HABS_HD_7_Imaging_longitudinal, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
-  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
-  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
-  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
-  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
-  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
-  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
-  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
-  "01_L_insula_thickavg","01_R_insula_thickavg",'Med_ID','Visit_ID'))
-HABS_data_z$Med_ID<-as.factor(HABS_data_z$Med_ID)
-HABS_data_z$Visit_ID<-as.factor(HABS_data_z$Visit_ID)
-HABS_data_z <- HABS_data_z  # make a copy
-HABS_data_z[sapply(HABS_data_z, is.numeric)] <- scale(HABS_data_z[sapply(HABS_data_z, is.numeric)])
-## create a z-scored dataset for cognitive measures
-efa_data_EF = subset(HABS_data_z, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
-  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
-  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
-  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
-  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
-  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
-  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
-  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
-  "01_L_insula_thickavg","01_R_insula_thickavg")) 
-efa_data_EF <- data.frame(lapply(efa_data_EF, function(x) as.numeric(as.character(x))))
-psych::fa.parallel(efa_data_EF, fa = "pc")
-#### Parallel analysis suggests that the number of components =  2 
-```
-```{r}
-# Run PCA
-pca_result <- psych::principal(efa_data_EF, nfactors = 2, rotate = "oblimin")
-# View results
-print(pca_result, digits = 2, cutoff = 0.3)
-pca_result$Vaccounted
-```
-```{r}
-two_factor_efa_fit = efa(data = efa_data_EF, nfactors=2, missing="fiml", rotation = "oblimin")
-summary(two_factor_efa_fit, fit.measures = TRUE, standardized = TRUE)
-```
+
+
+
+
+
+
+
 
 ```{r}
-### Select the memory-related ROIs 
-HABS_data_z = subset(HABS_HD_7_Imaging_longitudinal, select=c( "01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
-  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
-  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
-  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
-  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg",'Med_ID','Visit_ID'))
-HABS_data_z$Med_ID<-as.factor(HABS_data_z$Med_ID)
-HABS_data_z$Visit_ID<-as.factor(HABS_data_z$Visit_ID)
-HABS_data_z <- HABS_data_z  # make a copy
-HABS_data_z[sapply(HABS_data_z, is.numeric)] <- scale(HABS_data_z[sapply(HABS_data_z, is.numeric)])
-## create a z-scored dataset for cognitive measures
-efa_data_memory = subset(HABS_data_z, select=c( "01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
-  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
-  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
-  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
-  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg")) 
-efa_data_memory <- data.frame(lapply(efa_data_memory, function(x) as.numeric(as.character(x))))
-psych::fa.parallel(efa_data_memory, fa = "pc")
-#### Parallel analysis suggests that the number of components =  2 
-```
-```{r}
-# Run PCA
-pca_result <- psych::principal(efa_data_memory, nfactors = 2, rotate = "oblimin")
-# View results
-print(pca_result, digits = 2, cutoff = 0.3)
-pca_result$Vaccounted
-```
-```{r}
-two_factor_efa_fit = efa(data = efa_data_memory, nfactors=2, missing="fiml", rotation = "oblimin")
-summary(two_factor_efa_fit, fit.measures = TRUE, standardized = TRUE)
-```
-
-```{r}
-### combined EF+ Memory ROIs
-HABS_data_z2 = subset(HABS_HD_7_Imaging_longitudinal, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
-  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
-  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
-  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
-  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
-  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
-  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
-  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
-  "01_L_insula_thickavg","01_R_insula_thickavg","01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
-  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
-  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
-  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
-  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg",'Med_ID','Visit_ID'))
+### Select the all available ROIs 
+HABS_data_z2 = subset(HABS_HD_7_Imaging_longitudinal, select=c("L_bankssts_thickavg", "L_caudalanteriorcingulate_thickavg",
+  "L_caudalmiddlefrontal_thickavg", "L_cuneus_thickavg",
+  "L_entorhinal_thickavg", "L_fusiform_thickavg",
+  "L_inferiorparietal_thickavg", "L_inferiortemporal_thickavg",
+  "L_isthmuscingulate_thickavg", "L_lateraloccipital_thickavg",
+  "L_lateralorbitofrontal_thickavg", "L_lingual_thickavg",
+  "L_medialorbitofrontal_thickavg", "L_middletemporal_thickavg",
+  "L_parahippocampal_thickavg", "L_paracentral_thickavg",
+  "L_parsopercularis_thickavg", "L_parsorbitalis_thickavg",
+  "L_parstriangularis_thickavg", "L_pericalcarine_thickavg",
+  "L_postcentral_thickavg", "L_posteriorcingulate_thickavg",
+  "L_precentral_thickavg", "L_precuneus_thickavg",
+  "L_rostralanteriorcingulate_thickavg", "L_rostralmiddlefrontal_thickavg",
+  "L_superiorfrontal_thickavg", "L_superiorparietal_thickavg",
+  "L_superiortemporal_thickavg", "L_supramarginal_thickavg",
+  "L_frontalpole_thickavg", "L_temporalpole_thickavg",
+  "L_transversetemporal_thickavg", "L_insula_thickavg",
+  "R_bankssts_thickavg", "R_caudalanteriorcingulate_thickavg",
+  "R_caudalmiddlefrontal_thickavg", "R_cuneus_thickavg",
+  "R_entorhinal_thickavg", "R_fusiform_thickavg",
+  "R_inferiorparietal_thickavg", "R_inferiortemporal_thickavg",
+  "R_isthmuscingulate_thickavg", "R_lateraloccipital_thickavg",
+  "R_lateralorbitofrontal_thickavg", "R_lingual_thickavg",
+  "R_medialorbitofrontal_thickavg", "R_middletemporal_thickavg",
+  "R_parahippocampal_thickavg", "R_paracentral_thickavg",
+  "R_parsopercularis_thickavg", "R_parsorbitalis_thickavg",
+  "R_parstriangularis_thickavg", "R_pericalcarine_thickavg",
+  "R_postcentral_thickavg", "R_posteriorcingulate_thickavg",
+  "R_precentral_thickavg", "R_precuneus_thickavg",
+  "R_rostralanteriorcingulate_thickavg", "R_rostralmiddlefrontal_thickavg",
+  "R_superiorfrontal_thickavg", "R_superiorparietal_thickavg",
+  "R_superiortemporal_thickavg", "R_supramarginal_thickavg",
+  "R_frontalpole_thickavg", "R_temporalpole_thickavg",
+  "R_transversetemporal_thickavg", "R_insula_thickavg",'Med_ID','Visit_ID'))
 HABS_data_z2$Med_ID<-as.factor(HABS_data_z2$Med_ID)
 HABS_data_z2$Visit_ID<-as.factor(HABS_data_z2$Visit_ID)
-HABS_data_z2 <- HABS_data_z2  # make a copy
-HABS_data_z2[sapply(HABS_data_z2, is.numeric)] <- scale(HABS_data_z2[sapply(HABS_data_z2, is.numeric)])
-## create a z-scored dataset for cognitive measures
-efa_data2 = subset(HABS_data_z2, select=c("01_L_rostralmiddlefrontal_thickavg","01_R_rostralmiddlefrontal_thickavg",
-  "01_L_caudalmiddlefrontal_thickavg","01_R_caudalmiddlefrontal_thickavg",
-  "01_L_rostralanteriorcingulate_thickavg","01_R_rostralanteriorcingulate_thickavg",
-  "01_L_caudalanteriorcingulate_thickavg","01_R_caudalanteriorcingulate_thickavg",
-  "01_L_parsopercularis_thickavg","01_R_parsopercularis_thickavg",
-  "01_L_parstriangularis_thickavg","01_R_parstriangularis_thickavg",
-  "01_L_inferiorparietal_thickavg","01_R_inferiorparietal_thickavg",
-  "01_L_superiorparietal_thickavg","01_R_superiorparietal_thickavg",
-  "01_L_insula_thickavg","01_R_insula_thickavg","01_L_entorhinal_thickavg","01_R_entorhinal_thickavg",
-  "01_L_parahippocampal_thickavg","01_R_parahippocampal_thickavg",
-  "01_L_fusiform_thickavg","01_R_fusiform_thickavg",
-  "01_L_inferiortemporal_thickavg","01_R_inferiortemporal_thickavg",
-  "01_L_temporalpole_thickavg","01_R_temporalpole_thickavg")) 
-efa_data2 <- data.frame(lapply(efa_data2, function(x) as.numeric(as.character(x))))
+id_vars2 <- HABS_data_z2[, c("Med_ID", "Visit_ID")]
+efa_data_all2 <- HABS_data_z2[, !(names(HABS_data_z2) %in% c("Med_ID", "Visit_ID"))]
 
-psych::fa.parallel(efa_data2, fa = "pc")
-#### Parallel analysis suggests that the number of components =  4 
+efa_data_all_numeric2 <- as.data.frame(lapply(efa_data_all2, function(x) as.numeric(as.character(x))))
 
-# Run PCA
-pca_result2 <- psych::principal(efa_data2, nfactors = 4, rotate = "oblimin")
-# View results
-print(pca_result2, digits = 2, cutoff = 0.3)
-pca_result2$Vaccounted
+# Safely z-score only numeric columns
+efa_data_all_z2 <- as.data.frame(scale(efa_data_all_numeric2, center = TRUE, scale = TRUE))
+```
 
-two_factor_efa_fit2 = efa(data = efa_data2, nfactors=4, missing="fiml", rotation = "oblimin")
-summary(two_factor_efa_fit2, fit.measures = TRUE, standardized = TRUE)
+```{r}
+psych::fa.parallel(efa_data_all_z2, fa = "pc")
+#### Parallel analysis suggests that the number of components =  8 
+
+fa_result_TC1 <- psych::principal(efa_data_all_z2, nfactors = 1, rotate = "none", scores = TRUE)
+
+efa_data_all_z2$CorticalComposite <- fa_result_TC1$scores[, 1]
+
+#  Extract the 1st component (composite) scores
+pca_result_8 <- psych::principal(efa_data_all_z2, nfactors = 8, rotate = "oblimin")
+efa_data_all_z2$CorticalComposite2 <- pca_result_8$scores[, 1]
+
+
+# Step 3: Create a dataframe with IDs and the composite score
+predicted_scores_df2 <- data.frame(
+  Med_ID = id_vars2$Med_ID,
+  Visit_ID = id_vars2$Visit_ID,
+  CorticalComposite = efa_data_all_z2$CorticalComposite,
+  CorticalComposite2 = efa_data_all_z2$CorticalComposite2
+)
+
+# Step 4: Merge back into the main dataset
+HABS_HD_7_Imaging_longitudinal <- merge(
+  HABS_HD_7_Imaging_longitudinal,
+  predicted_scores_df2,
+  by = c("Med_ID", "Visit_ID"),
+  all.x = TRUE
+)
 ```
 
 
+```{r}
+# Z-score covariates
+HABS_HD_7_Imaging_longitudinal$A0 <- scale(HABS_HD_7_Imaging_longitudinal$A0)
+HABS_HD_7_Imaging_longitudinal$dA <- scale(HABS_HD_7_Imaging_longitudinal$dA)
+HABS_HD_7_Imaging_longitudinal$EducationYears <- scale(HABS_HD_7_Imaging_longitudinal$EducationYears)
+```
 
 
+```{r}
+a1<-lmer(CorticalComposite ~  A0 * dA * Bilingualism  * Ethnicity + A0 * dA * Bilingualism  *Gender+ EducationYears + Practice + (1|Med_ID), data = HABS_HD_7_Imaging_longitudinal)
+test(emtrends(a1, ~ Bilingualism , var = "dA"))
+car::Anova(a1) 
+effectsize(a1)
+```
+
+
+```{r}
+a1<-lmer(CorticalComposite2 ~  A0 * dA * Bilingualism  * Ethnicity + A0 * dA * Bilingualism  *Gender+ EducationYears + Practice + (1|Med_ID), data = HABS_HD_7_Imaging_longitudinal)
+test(emtrends(a1, ~ Bilingualism , var = "dA"))
+car::Anova(a1) 
+effectsize(a1)
+```
+
+```{r}
+a1<-lmer(bi_hippocampus ~  A0 * dA * Bilingualism  * Ethnicity + A0 * dA * Bilingualism  * Gender + EducationYears + Practice + (1|Med_ID), data = HABS_HD_7_Imaging_longitudinal)
+test(emtrends(a1, ~ Bilingualism , var = "dA"))
+car::Anova(a1) 
+```
+
+```{r}
+a1<-lmer(Overall_thickness ~  A0 * dA * Bilingualism  * Ethnicity + A0 * dA * Bilingualism  * Gender + EducationYears + Practice + (1|Med_ID), data = HABS_HD_7_Imaging_longitudinal)
+test(emtrends(a1, ~ Bilingualism , var = "dA"))
+car::Anova(a1) 
+```
 
 
 
