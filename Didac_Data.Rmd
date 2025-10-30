@@ -1,0 +1,934 @@
+---
+title: "HABS_HD_7_Analysis"
+output: html_document
+date: "2025-07-31"
+---
+
+# Is Bilingualism Protective against Late-life Cognitive decline? Differences in Ethnicity, Gender and Cognitive Domain in Cross-Sectional and Longitudinal Analyses
+
+```{r}
+### download required package
+library(readxl)
+library(readr)
+library(lme4)
+library(lmerTest) 
+library(sjstats)
+library(nlme)
+library(dplyr)
+library(plyr)
+library(pwr)
+library(olsrr)
+library(car)
+library(MatchIt)
+library(ggplot2)
+library(glmmTMB)
+library(tableone)
+library(sjPlot)
+library(aod)
+library(ggeffects) 
+library(effects)
+library(ggplot2)
+library(scales)
+library(effectsize) 
+library(GGally) 
+library(lavaan) 
+library(tableone)
+library(GGally)
+library(corrplot)
+library(pheatmap)
+library(ppcor)
+library(broom)
+library(broom.mixed)
+library(purrr)
+library(tidyr)
+library(openxlsx)
+library(sjPlot)
+```
+
+
+```{r}
+setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+RP_HD_7_Imaging<-read.csv("Didac_Data.csv")
+Background1<-read.csv("Demographic_Cross_sectional.csv")
+HABS_HD_7_Didac_Cross_sectional<-merge(RP_HD_7_Imaging,Background1, by= c("Med_ID","Visit_ID"))
+RP_HD_7_Genomics<-read.csv("RP_HD_7_Genomics.csv")
+HABS_HD_7_Didac_Cross_sectional<-merge(HABS_HD_7_Didac_Cross_sectional,RP_HD_7_Genomics, by= c("Med_ID","Visit_ID"))
+
+
+HABS_HD_7_Didac_Cross_sectional$Ethnicity <- factor(HABS_HD_7_Didac_Cross_sectional $Ethnicity, levels = c("Hispanic","White","Black")) # so referent is first, ie Hispanic)
+HABS_HD_7_Didac_Cross_sectional $Bilingualism <- factor(HABS_HD_7_Didac_Cross_sectional $Bilingualism, levels = c("Monolingual", "Bilingual"))
+HABS_HD_7_Didac_Cross_sectional$Gender <- factor(HABS_HD_7_Didac_Cross_sectional $Gender, levels =c("Male", "Female"))
+HABS_HD_7_Didac_Cross_sectional$APOE4_Positivity <- factor(HABS_HD_7_Didac_Cross_sectional $APOE4_Positivity, levels =c("0", "1"), labels =c("0", "1"))
+
+contrasts(HABS_HD_7_Didac_Cross_sectional $Gender) = c(-1,1)  ### (male:-1; female: 1)
+contrasts(HABS_HD_7_Didac_Cross_sectional $Bilingualism) = c(-1,1) ### (monolingual:-1; bilingual: 1)
+table(HABS_HD_7_Didac_Cross_sectional $Bilingualism,HABS_HD_7_Didac_Cross_sectional $Ethnicity,HABS_HD_7_Didac_Cross_sectional $Gender)
+```
+
+
+```{r}
+hist(HABS_HD_7_Didac_Cross_sectional$TotalGrayVol)
+hist(HABS_HD_7_Didac_Cross_sectional$BrainSegVolNotVent)
+hist(HABS_HD_7_Didac_Cross_sectional$Bi_Hippocampus)
+hist(HABS_HD_7_Didac_Cross_sectional$MeanThickness_thickness)
+hist(HABS_HD_7_Didac_Cross_sectional$WhiteSurfArea_area)
+```
+```{r}
+HABS_HD_7_Didac_Cross_sectional$WM_hypo_log <- log1p(HABS_HD_7_Didac_Cross_sectional$WM_hypointensities)
+HABS_HD_7_Didac_Cross_sectional$WM_hypo_z <- scale(HABS_HD_7_Didac_Cross_sectional$WM_hypo_log)
+HABS_HD_7_Didac_Cross_sectional <- HABS_HD_7_Didac_Cross_sectional %>%
+  mutate(
+    WM_hypo_log = log1p(WM_hypointensities),
+    WM_hypo_z   = scale(WM_hypo_log)
+  )
+hist(HABS_HD_7_Didac_Cross_sectional$WM_hypo_z)
+```
+
+
+```{r}
+###Z-scores
+HABS_HD_7_Didac_Cross_sectional$Age<- scale(HABS_HD_7_Didac_Cross_sectional$Age,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_Cross_sectional$EducationYears<- scale(HABS_HD_7_Didac_Cross_sectional$EducationYears,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_Cross_sectional$eTIV<- scale(HABS_HD_7_Didac_Cross_sectional$eTIV,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_Cross_sectional$TotalGrayVol<- scale(HABS_HD_7_Didac_Cross_sectional$TotalGrayVol,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_Cross_sectional$BrainSegVolNotVent<- scale(HABS_HD_7_Didac_Cross_sectional$BrainSegVolNotVent,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_Cross_sectional$Bi_Hippocampus<- scale(HABS_HD_7_Didac_Cross_sectional$Bi_Hippocampus,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_Cross_sectional$MeanThickness_thickness<- scale(HABS_HD_7_Didac_Cross_sectional$MeanThickness_thickness,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_Cross_sectional$WhiteSurfArea_area<- scale(HABS_HD_7_Didac_Cross_sectional$WhiteSurfArea_area,center = TRUE,scale = TRUE)
+```
+
+```{r}
+# Define variables to adjust for eTIV
+brain_vars <- c(
+  "TotalGrayVol",
+  "BrainSegVolNotVent",
+  "Bi_Hippocampus",
+  "WM_hypo_z",
+  "WhiteSurfArea_area",
+  "MeanThickness_thickness"
+)
+
+adjust_for_eTIV <- function(data, var, id_var = "Med_ID", covar = "eTIV") {
+  df_complete <- data %>%
+    dplyr::filter(!is.na(.data[[var]]), !is.na(.data[[covar]]))
+  
+  model <- lm(reformulate(covar, var), data = df_complete)
+  adj_name <- paste0(var, "_adj")
+  
+  df_complete[[adj_name]] <- residuals(model)
+  
+  df_complete %>%
+    dplyr::select(all_of(c(id_var, adj_name)))
+}
+
+# Apply the adjustment across all variables
+adjusted_data <- purrr::map(brain_vars, ~adjust_for_eTIV(HABS_HD_7_Didac_Cross_sectional, .x)) %>%
+  purrr::reduce(dplyr::left_join, by = "Med_ID")
+
+# Merge adjusted residuals back to the main dataset
+HABS_HD_7_Didac_Cross_sectional <- HABS_HD_7_Didac_Cross_sectional %>%
+  dplyr::left_join(adjusted_data, by = "Med_ID")
+```
+
+```{r}
+a1<-lm(TotalGrayVol_adj ~ Bilingualism * poly(Age,2) * Ethnicity + Gender +  EducationYears , data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(a1)
+eta_squared(a1)
+effectsize(a1)
+```
+
+```{r}
+a1<-lm(BrainSegVolNotVent_adj ~ Bilingualism * poly(Age,2) * Ethnicity + Gender +  EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(a1)
+eta_squared(a1)
+effectsize(a1)
+```
+
+```{r}
+a1<-lm(Bi_Hippocampus_adj ~ Bilingualism * poly(Age,2) * Ethnicity + Gender +  EducationYears , data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(a1)
+eta_squared(a1)
+effectsize(a1)
+```
+
+```{r}
+a1<-lm(WM_hypo_z_adj ~ Bilingualism * poly(Age,2) * Ethnicity + Gender +  EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(a1)
+eta_squared(a1)
+effectsize(a1)
+```
+
+```{r}
+a1<-lm(MeanThickness_MeanThickness_thickness_adj ~ Bilingualism * poly(Age,2) * Ethnicity + Gender +  EducationYears , data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(a1)
+eta_squared(a1)
+effectsize(a1)
+```
+
+```{r}
+a1<-lm(WhiteSurfArea_area_adj ~ Bilingualism * poly(Age,2) * Ethnicity + Gender +  EducationYears , data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(a1)
+eta_squared(a1)
+effectsize(a1)
+```
+
+
+###Associations analyses
+```{r}
+###EF:Bilingualism and Brain
+m1<-lm(Executive_Function ~ Bilingualism * TotalGrayVol_adj  * Ethnicity + Gender + poly(Age,2) + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+# Example: ensure TotalGrayVol_adj, Age, EducationYears are numeric
+str(HABS_HD_7_Didac_Cross_sectional$TotalGrayVol_adj)
+str(HABS_HD_7_Didac_Cross_sectional$Age)
+str(HABS_HD_7_Didac_Cross_sectional$EducationYears)
+
+# Convert if necessary
+HABS_HD_7_Didac_Cross_sectional <- HABS_HD_7_Didac_Cross_sectional %>%
+  mutate(
+    TotalGrayVol_adj = as.numeric(TotalGrayVol_adj),
+    Age = as.numeric(Age),
+    EducationYears = as.numeric(EducationYears),
+    Bilingualism = factor(Bilingualism),
+    Gender = factor(Gender),
+    Ethnicity = factor(Ethnicity)
+  )
+interaction_model <- lm(Executive_Function ~ TotalGrayVol_adj * Bilingualism * Ethnicity + Gender +
+                          poly(Age,2)  + EducationYears,
+                        data = HABS_HD_7_Didac_Cross_sectional)
+
+pred <- ggpredict(
+  interaction_model,
+  terms = c("TotalGrayVol_adj [all]", "Bilingualism")
+)
+
+# Plot
+plot(pred, show_data = TRUE) +
+  ggtitle("Two-way interaction: TotalGrayVol × Bilingualism ") +
+  ylab("Predicted Executive_Function") +
+  xlab("Adjusted TotalGrayVol")  
+```
+
+```{r}
+###EF:Bilingualism and Brain
+m1<-lm(Executive_Function ~ Bilingualism * BrainSegVolNotVent_adj  * Ethnicity + Gender + poly(Age,2) + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+###EF:Bilingualism and Brain
+m1<-lm(Executive_Function ~ Bilingualism * WM_hypo_z_adj  * Ethnicity + Gender + poly(Age,2) + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+###EF:Bilingualism and Brain
+m1<-lm(Executive_Function ~ Bilingualism * MeanThickness_thickness_adj * Ethnicity + Gender + poly(Age,2) + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+###Bilingualism and MeanThickness_thickness_adj
+m1<-lm(Executive_Function ~ Bilingualism * MeanThickness_thickness_adj  + Gender + poly(Age,2) + EducationYears, data =subset(HABS_HD_7_Didac_Cross_sectional, Ethnicity == "Hispanic") )
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+###Bilingualism and MeanThickness_thickness_adj
+m1<-lm(Executive_Function ~ Bilingualism * MeanThickness_thickness_adj  + Gender + poly(Age,2) + EducationYears, data =subset(HABS_HD_7_Didac_Cross_sectional, Ethnicity == "Black") )
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+###Bilingualism and MeanThickness_thickness_adj
+m1<-lm(Executive_Function ~ Bilingualism * MeanThickness_thickness_adj  + Gender + poly(Age,2) + EducationYears, data =subset(HABS_HD_7_Didac_Cross_sectional, Ethnicity == "White") )
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+# Example: ensure MeanThickness_thickness_adj, Age, EducationYears are numeric
+str(HABS_HD_7_Didac_Cross_sectional$MeanThickness_thickness_adj)
+str(HABS_HD_7_Didac_Cross_sectional$Age)
+str(HABS_HD_7_Didac_Cross_sectional$EducationYears)
+
+# Convert if necessary
+HABS_HD_7_Didac_Cross_sectional <- HABS_HD_7_Didac_Cross_sectional %>%
+  mutate(
+    MeanThickness_thickness_adj = as.numeric(MeanThickness_thickness_adj),
+    Age = as.numeric(Age),
+    EducationYears = as.numeric(EducationYears),
+    Bilingualism = factor(Bilingualism),
+    Gender = factor(Gender),
+    Ethnicity = factor(Ethnicity)
+  )
+interaction_model <- lm(Executive_Function ~ MeanThickness_thickness_adj * Bilingualism * Ethnicity + Gender +
+                          poly(Age,2)  + EducationYears,
+                        data = HABS_HD_7_Didac_Cross_sectional)
+
+pred <- ggpredict(
+  interaction_model,
+  terms = c("MeanThickness_thickness_adj [all]", "Bilingualism","Ethnicity")
+)
+
+# Plot
+plot(pred, show_data = TRUE) +
+  ggtitle("Three-way interaction: MeanThickness × Bilingualism ") +
+  ylab("Predicted Executive_Function") +
+  xlab("Adjusted MeanThickness_thickness")  
+```
+```{r}
+names(adjusted_data)
+```
+
+
+```{r}
+###EM:Bilingualism and Brain
+m1<-lm(Episodic_Memory ~ Bilingualism * Bi_Hippocampus_adj * Ethnicity + Gender + poly(Age,2) + EducationYears, data =HABS_HD_7_Didac_Cross_sectional)
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+# Example: ensure Bi_Hippocampus_adj, Age, EducationYears are numeric
+str(HABS_HD_7_Didac_Cross_sectional$Bi_Hippocampus_adj)
+str(HABS_HD_7_Didac_Cross_sectional$Age)
+str(HABS_HD_7_Didac_Cross_sectional$EducationYears)
+
+# Convert if necessary
+HABS_HD_7_Didac_Cross_sectional <- HABS_HD_7_Didac_Cross_sectional %>%
+  mutate(
+    Bi_Hippocampus_adj = as.numeric(Bi_Hippocampus_adj),
+    Age = as.numeric(Age),
+    EducationYears = as.numeric(EducationYears),
+    Bilingualism = factor(Bilingualism),
+    Gender = factor(Gender),
+    Ethnicity = factor(Ethnicity)
+  )
+interaction_model <- lm(Episodic_Memory ~ Bi_Hippocampus_adj * Bilingualism * Ethnicity + Gender +
+                          poly(Age,2)  + EducationYears,
+                        data = HABS_HD_7_Didac_Cross_sectional)
+
+pred <- ggpredict(
+  interaction_model,
+  terms = c("Bi_Hippocampus_adj [all]", "Bilingualism")
+)
+
+# Plot
+plot(pred, show_data = TRUE) +
+  ggtitle("Two-way interaction: Bi_Hippocampus × Bilingualism ") +
+  ylab("Predicted Episodic_Memory") +
+  xlab("Adjusted Hippocampus")  
+```
+
+```{r}
+###EF:Bilingualism and Brain
+m1<-lm(Episodic_Memory ~ Bilingualism * TotalGrayVol_adj * Ethnicity + Gender + poly(Age,2) + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+###EM:Bilingualism and Brain
+m1<-lm(Episodic_Memory ~ Bilingualism * BrainSegVolNotVent_adj  * Ethnicity + Gender + poly(Age,2) + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+###EM:Bilingualism and Brain
+m1<-lm(Episodic_Memory ~ Bilingualism * WM_hypo_z_adj  * Ethnicity + Gender + poly(Age,2) + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+###EM:Bilingualism and Brain
+m1<-lm(Episodic_Memory ~ Bilingualism * WM_hypo_z_adj  + Gender + poly(Age,2) + EducationYears, data = subset(HABS_HD_7_Didac_Cross_sectional, Ethnicity == "Hispanic") )
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+###EM:Bilingualism and Brain
+m1<-lm(Episodic_Memory ~ Bilingualism * WM_hypo_z_adj  + Gender + poly(Age,2) + EducationYears, data = subset(HABS_HD_7_Didac_Cross_sectional, Ethnicity == "Black") )
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+###EM:Bilingualism and Brain
+m1<-lm(Episodic_Memory ~ Bilingualism * WM_hypo_z_adj  + Gender + poly(Age,2) + EducationYears, data = subset(HABS_HD_7_Didac_Cross_sectional, Ethnicity == "White") )
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+# Example: ensure WM_hypo_z_adj, Age, EducationYears are numeric
+str(HABS_HD_7_Didac_Cross_sectional$WM_hypo_z_adj)
+str(HABS_HD_7_Didac_Cross_sectional$Age)
+str(HABS_HD_7_Didac_Cross_sectional$EducationYears)
+
+# Convert if necessary
+HABS_HD_7_Didac_Cross_sectional <- HABS_HD_7_Didac_Cross_sectional %>%
+  mutate(
+    WM_hypo_z_adj = as.numeric(WM_hypo_z_adj),
+    Age = as.numeric(Age),
+    EducationYears = as.numeric(EducationYears),
+    Bilingualism = factor(Bilingualism),
+    Gender = factor(Gender),
+    Ethnicity = factor(Ethnicity)
+  )
+interaction_model <- lm(Episodic_Memory ~ WM_hypo_z_adj * Bilingualism * Ethnicity + Gender +
+                          poly(Age,2)  + EducationYears,
+                        data = HABS_HD_7_Didac_Cross_sectional)
+
+pred <- ggpredict(
+  interaction_model,
+  terms = c("WM_hypo_z_adj [all]", "Bilingualism","Ethnicity")
+)
+
+# Plot
+plot(pred, show_data = TRUE) +
+  ggtitle("Three-way interaction: WM_hypo_z × Bilingualism × Ethnicity ") +
+  ylab("Predicted Episodic_Memory") +
+  xlab("Adjusted WM_hypo")  
+```
+
+
+```{r}
+###EM:Bilingualism and Brain
+m1<-lm(Episodic_Memory ~ Bilingualism * WhiteSurfArea_area_adj * Ethnicity + Gender + poly(Age,2) + EducationYears, data =HABS_HD_7_Didac_Cross_sectional)
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+```{r}
+###EM:Bilingualism and Brain
+m1<-lm(Episodic_Memory ~ Bilingualism * MeanThickness_thickness_adj * Ethnicity + Gender + poly(Age,2) + EducationYears, data =HABS_HD_7_Didac_Cross_sectional)
+car::Anova(m1)
+effectsize(m1)
+eta_squared(m1)
+```
+
+
+```{r}
+HABS_HD_7_Didac_Cross_sectional$TotalGrayVol_adj <- as.numeric(HABS_HD_7_Didac_Cross_sectional$TotalGrayVol_adj)
+
+### Mediator model (path a)
+model.M <- lm(TotalGrayVol_adj ~ Bilingualism + Ethnicity + Age + Gender + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+###Outcome model (paths b and c’)
+model.Y <- lm(Executive_Function ~ TotalGrayVol_adj + Bilingualism + Ethnicity + Age + Gender + EducationYears , data = HABS_HD_7_Didac_Cross_sectional)
+med.out <- mediate(model.M, model.Y, treat = "Bilingualism", mediator = "TotalGrayVol_adj", boot = TRUE, sims = 5000)
+summary(med.out)
+```
+
+```{r}
+HABS_HD_7_Didac_Cross_sectional$BrainSegVolNotVent_adj <- as.numeric(HABS_HD_7_Didac_Cross_sectional$TotalGrayVol_adj)
+
+### Mediator model (path a)
+model.M <- lm(BrainSegVolNotVent_adj ~ Bilingualism + Ethnicity + Age + Gender + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+###Outcome model (paths b and c’)
+model.Y <- lm(Executive_Function ~ BrainSegVolNotVent_adj + Bilingualism + Ethnicity + Age + Gender + EducationYears , data = HABS_HD_7_Didac_Cross_sectional)
+med.out <- mediate(model.M, model.Y, treat = "Bilingualism", mediator = "BrainSegVolNotVent_adj", boot = TRUE, sims = 5000)
+summary(med.out)
+```
+
+
+```{r}
+HABS_HD_7_Didac_Cross_sectional$WM_hypo_z_adj <- as.numeric(HABS_HD_7_Didac_Cross_sectional$WM_hypo_z_adj)
+
+### Mediator model (path a)
+model.M <- lm(WM_hypo_z_adj ~ Bilingualism + Ethnicity + Age + Gender + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+###Outcome model (paths b and c’)
+model.Y <- lm(Executive_Function ~ WM_hypo_z_adj + Bilingualism + Ethnicity + Age + Gender + EducationYears , data = HABS_HD_7_Didac_Cross_sectional)
+med.out <- mediate(model.M, model.Y, treat = "Bilingualism", mediator = "WM_hypo_z_adj", boot = TRUE, sims = 5000)
+summary(med.out)
+```
+
+
+```{r}
+HABS_HD_7_Didac_Cross_sectional$WhiteSurfArea_area_adj <- as.numeric(HABS_HD_7_Didac_Cross_sectional$WhiteSurfArea_area_adj)
+
+### Mediator model (path a)
+model.M <- lm(WhiteSurfArea_area_adj ~ Bilingualism + Ethnicity + Age + Gender + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+###Outcome model (paths b and c’)
+model.Y <- lm(Executive_Function ~ WhiteSurfArea_area_adj + Bilingualism+ Ethnicity + Age + Gender + EducationYears , data = HABS_HD_7_Didac_Cross_sectional)
+med.out <- mediate(model.M, model.Y, treat = "Bilingualism", mediator = "WhiteSurfArea_area_adj", boot = TRUE, sims = 5000)
+summary(med.out)
+```
+
+```{r}
+HABS_HD_7_Didac_Cross_sectional$Bi_Hippocampus_adj <- as.numeric(HABS_HD_7_Didac_Cross_sectional$Bi_Hippocampus_adj)
+
+### Mediator model (path a)
+model.M <- lm(Bi_Hippocampus_adj ~ Bilingualism + Ethnicity + Age + Gender + EducationYears, data = HABS_HD_7_Didac_Cross_sectional)
+###Outcome model (paths b and c’)
+model.Y <- lm(Episodic_Memory ~ Bi_Hippocampus_adj + Bilingualism+ Ethnicity + Age + Gender + EducationYears , data = HABS_HD_7_Didac_Cross_sectional)
+med.out <- mediate(model.M, model.Y, treat = "Bilingualism", mediator = "Bi_Hippocampus_adj", boot = TRUE, sims = 5000)
+summary(med.out)
+```
+
+
+Function for plotting bar graphs
+```{r}
+fot.fun <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE, id=NULL) {
+  library(plyr)
+  # New version of length which can handle NA's: if na.rm==T, don't count them
+  length2 <- function (x, na.rm=FALSE) {
+    if (na.rm) sum(!is.na(x))
+    else       length(x)}
+  # This does the effectsize. For each group's data frame, return a vector with
+  # N, mean, and sd
+  if(is.null(id)){
+    datac <- ddply(data, groupvars, .drop=.drop,
+                   .fun = function(xx, col) {
+                     c(N    = length2(xx[[col]], na.rm=na.rm),
+                       mean = mean   (xx[[col]], na.rm=na.rm),
+                       median = median (xx[[col]], na.rm=na.rm),
+                       sum = sum (xx[[col]], na.rm=na.rm),
+                       sd   = sd     (xx[[col]], na.rm=na.rm)  )},
+                   measurevar  ) }
+  else {
+    datac <- ddply(data, groupvars, .drop=.drop,
+                   .fun = function(xx, col) {
+                     c(id = id,
+                       N    = length2(xx[[col]], na.rm=na.rm),
+                       mean = mean   (xx[[col]], na.rm=na.rm),
+                       median = median (xx[[col]], na.rm=na.rm),
+                       sum = sum (xx[[col]], na.rm=na.rm),
+                       sd   = sd     (xx[[col]], na.rm=na.rm)
+                     ) }, measurevar  )
+    datac<-datac[,c(3,1,2,4,5,6,7,8)]  }
+  # Rename the "mean" column    
+  datac <- reshape:::rename(datac, c("mean" = measurevar))
+  
+  datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+  
+  # Confidence interval multiplier for standard error
+  # Calculate t-statistic for confidence interval: 
+  # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+  ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+  datac$ci <- datac$se * ciMult
+  return(datac)
+}
+```
+
+#### 2 Longitudinal analysis
+```{r}
+RP_HD_7_Imaging<-read.csv("Didac_Data.csv")
+Background2<-read.csv("Demographic_longitudinal.csv")
+HABS_HD_7_Didac_longitudinal<-merge(RP_HD_7_Imaging,Background2, by= c("Med_ID","Visit_ID"))
+
+HABS_HD_7_Didac_longitudinal$Bilingualism <- factor(HABS_HD_7_Didac_longitudinal$Bilingualism, levels = c("Monolingual", "Bilingual"))
+HABS_HD_7_Didac_longitudinal$Gender <- factor(HABS_HD_7_Didac_longitudinal$Gender, levels = c("Male", "Female"))
+
+contrasts(HABS_HD_7_Didac_longitudinal$Gender) = c(-1,1)  ### (male:-1; female: 1)
+contrasts(HABS_HD_7_Didac_longitudinal$Bilingualism) = c(-1,1) ### (monolingual:-1; bilingual: 1)
+table(HABS_HD_7_Didac_longitudinal$Bilingualism,HABS_HD_7_Didac_longitudinal$Ethnicity,HABS_HD_7_Didac_longitudinal$Gender) 
+
+unique_participants<-subset(HABS_HD_7_Didac_longitudinal, Visit_ID=="1")
+table(unique_participants$Bilingualism,unique_participants$Ethnicity,unique_participants$Gender) 
+```
+
+```{r}
+HABS_HD_7_Didac_longitudinal$WM_hypo_log <- log1p(HABS_HD_7_Didac_longitudinal$WM_hypointensities)
+HABS_HD_7_Didac_longitudinal$WM_hypo_z <- scale(HABS_HD_7_Didac_longitudinal$WM_hypo_log)
+HABS_HD_7_Didac_longitudinal <- HABS_HD_7_Didac_longitudinal %>%
+  mutate(
+    WM_hypo_log = log1p(WM_hypointensities),
+    WM_hypo_z   = scale(WM_hypo_log)
+  )
+hist(HABS_HD_7_Didac_longitudinal$WM_hypo_z)
+```
+
+```{r}
+###Z-scores
+HABS_HD_7_Didac_longitudinal$A0<- scale(HABS_HD_7_Didac_longitudinal$A0,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_longitudinal$dA<- scale(HABS_HD_7_Didac_longitudinal$dA,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_longitudinal$EducationYears<- scale(HABS_HD_7_Didac_longitudinal$EducationYears,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_longitudinal$eTIV<- scale(HABS_HD_7_Didac_longitudinal$eTIV,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_longitudinal$TotalGrayVol<- scale(HABS_HD_7_Didac_longitudinal$TotalGrayVol,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_longitudinal$BrainSegVolNotVent<- scale(HABS_HD_7_Didac_longitudinal$BrainSegVolNotVent,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_longitudinal$Bi_Hippocampus<- scale(HABS_HD_7_Didac_longitudinal$Bi_Hippocampus,center = TRUE,scale = TRUE)
+HABS_HD_7_Didac_longitudinal$MeanThickness_thickness<- scale(HABS_HD_7_Didac_longitudinal$MeanThickness_thickness,center = TRUE,scale = TRUE) 
+HABS_HD_7_Didac_longitudinal$WhiteSurfArea_area<- scale(HABS_HD_7_Didac_longitudinal$WhiteSurfArea_area,center = TRUE,scale = TRUE)
+```
+
+```{r}
+data_subset_Didac <- HABS_HD_7_Didac_longitudinal %>%
+  dplyr::group_by(Med_ID) %>%                       # process per participant
+    dplyr::filter(n() >= 2) %>%                      # keep participants with at least 2 visits
+  ungroup()
+```
+
+
+```{r}
+df1 <- HABS_HD_7_Didac_longitudinal %>%
+  dplyr::group_by(Med_ID) %>%
+  dplyr::mutate(n_time = dplyr::n_distinct(dA)) %>%
+  dplyr::ungroup() %>%
+  dplyr::filter(n_time >= 2)
+
+model_specs <- list(
+  brain      = list(formula = BrainSegVolNotVent   ~ A0 + dA + eTIV + (1 + dA | Med_ID), data = data_subset_Didac),
+  gray       = list(formula = TotalGrayVol         ~ A0 + dA + eTIV + (1 + dA | Med_ID), data = data_subset_Didac),
+  hipp       = list(formula = Bi_Hippocampus       ~ A0 + dA + eTIV + (1 + dA | Med_ID), data = data_subset_Didac),
+  WMH        = list(formula = WM_hypo_z            ~ A0 + dA + eTIV + (1 + dA | Med_ID), data = data_subset_Didac),
+  area       = list(formula = WhiteSurfArea_area   ~ A0 + dA + eTIV + (1 + dA | Med_ID), data = data_subset_Didac),
+  thickness  = list(formula = MeanThickness_thickness   ~ A0 + dA + eTIV + (1 + dA | Med_ID), data = data_subset_Didac),
+  cog_ef     = list(formula = Executive_Function   ~ A0 + dA + Practice + (1 + dA | Med_ID), data = df1),
+  cog_em     = list(formula = Episodic_Memory      ~ A0 + dA + Practice + (1 + dA | Med_ID), data = df1)
+)
+
+fitted_models <- purrr::imap(model_specs, ~{
+  message("Fitting model: ", .y)
+  lmer(.x$formula, data = .x$data, REML = TRUE)
+})
+
+extract_coef <- function(model, prefix) {
+  coefs <- coef(model)$Med_ID %>%
+    tibble::rownames_to_column("Med_ID") %>%
+    dplyr::rename(
+      !!paste0(prefix, "_intercept") := `(Intercept)`,
+      !!paste0(prefix, "_slope")     := dA
+    ) %>%
+    dplyr::mutate(Med_ID = as.character(Med_ID))
+  return(coefs)
+}
+
+coef_data <- purrr::imap(fitted_models, extract_coef) %>%
+  purrr::reduce(dplyr::left_join, by = "Med_ID")
+
+per_id_cov <- df1 %>%
+  dplyr::group_by(Med_ID) %>%
+  dplyr::summarise(
+    Bilingualism   = dplyr::first(Bilingualism),
+    A0             = dplyr::first(A0),
+    EducationYears = dplyr::first(EducationYears),
+    Gender         = dplyr::first(Gender),
+    Ethnicity      = dplyr::first(Ethnicity),
+    n_visits       = dplyr::n_distinct(dA),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(Med_ID = as.character(Med_ID))
+
+slopes <- per_id_cov %>%
+  dplyr::left_join(coef_data, by = "Med_ID")
+
+contrasts(slopes$Gender)       <- c(-1, 1)  # Male = -1, Female = +1
+contrasts(slopes$Bilingualism) <- c(-1, 1)  # Monolingual = -1, Bilingual = +1
+```
+
+```{r}
+names(slopes)
+```
+
+
+```{r}
+# Executive Function slope outcome
+m_delta_ef_w <- lm(
+  cog_ef_slope ~ brain_slope * Bilingualism * Ethnicity + EducationYears + Gender ,
+  data = slopes, weights = n_visits)
+car::Anova(m_delta_ef_w)
+effectsize(m_delta_ef_w)
+```
+
+```{r}
+# Executive Function slope outcome
+m_delta_ef_w <- lm(
+  cog_ef_slope ~ gray_slope * Bilingualism * Ethnicity + EducationYears + Gender ,
+  data = slopes, weights = n_visits)
+car::Anova(m_delta_ef_w)
+effectsize(m_delta_ef_w)
+```
+
+```{r}
+# Executive Function slope outcome
+m_delta_ef_w <- lm(
+  cog_ef_slope ~ WMH_slope * Bilingualism * Ethnicity + EducationYears + Gender ,
+  data = slopes, weights = n_visits)
+car::Anova(m_delta_ef_w)
+effectsize(m_delta_ef_w)
+```
+
+```{r}
+# Executive Function slope outcome
+m_delta_ef_w <- lm(
+  cog_ef_slope ~ area_slope * Bilingualism * Ethnicity + EducationYears + Gender ,
+  data = slopes, weights = n_visits)
+car::Anova(m_delta_ef_w)
+effectsize(m_delta_ef_w)
+```
+
+```{r}
+# Executive Function slope outcome
+m_delta_ef_w <- lm(
+  cog_ef_slope ~ thickness_slope * Bilingualism * Ethnicity + EducationYears + Gender ,
+  data = slopes, weights = n_visits)
+car::Anova(m_delta_ef_w)
+effectsize(m_delta_ef_w)
+```
+
+```{r}
+m_delta_em_w <- lm(
+  cog_em_slope ~ hipp_slope * Bilingualism * Ethnicity + EducationYears + Gender ,
+  data = slopes, weights = n_visits)
+car::Anova(m_delta_em_w)
+effectsize(m_delta_em_w)
+```
+
+```{r}
+m_delta_em_w <- lm(
+  cog_em_slope ~ brain_slope * Bilingualism * Ethnicity + EducationYears + Gender ,
+  data = slopes, weights = n_visits)
+car::Anova(m_delta_em_w)
+effectsize(m_delta_em_w)
+```
+
+
+```{r}
+m_delta_em_w <- lm(
+  cog_em_slope ~ gray_slope * Bilingualism * Ethnicity + EducationYears + Gender ,
+  data = slopes, weights = n_visits)
+car::Anova(m_delta_em_w)
+effectsize(m_delta_em_w)
+```
+
+```{r}
+m_delta_em_w <- lm(
+  cog_em_slope ~ WMH_slope * Bilingualism * Ethnicity + EducationYears + Gender ,
+  data = slopes, weights = n_visits)
+car::Anova(m_delta_em_w)
+effectsize(m_delta_em_w)
+```
+
+```{r}
+m_delta_em_w <- lm(
+  cog_em_slope ~ area_slope * Bilingualism * Ethnicity + EducationYears + Gender ,
+  data = slopes, weights = n_visits)
+car::Anova(m_delta_em_w)
+effectsize(m_delta_em_w)
+```
+
+```{r}
+m_delta_em_w <- lm(
+  cog_em_slope ~ thickness_slope * Bilingualism * Ethnicity + EducationYears + Gender ,
+  data = slopes, weights = n_visits)
+car::Anova(m_delta_em_w)
+effectsize(m_delta_em_w)
+```
+
+
+```{r}
+a1<-lmer(TotalGrayVol ~  A0 * dA * Bilingualism  * Ethnicity + Gender + EducationYears + eTIV + (1|Med_ID), data = data_subset_Didac)
+test(emtrends(a1, ~ Bilingualism , var = "dA"))
+car::Anova(a1) 
+effectsize(a1)
+```
+
+```{r}
+a1<-lmer(BrainSegVolNotVent ~  A0 * dA * Bilingualism  * Ethnicity + Gender + EducationYears + eTIV + (1|Med_ID), data = data_subset_Didac)
+test(emtrends(a1, ~ Bilingualism , var = "dA"))
+car::Anova(a1) 
+effectsize(a1)
+```
+
+```{r}
+a1<-lmer(Bi_Hippocampus ~  A0 * dA * Bilingualism  * Ethnicity + Gender + EducationYears + eTIV + (1|Med_ID), data = data_subset_Didac)
+test(emtrends(a1, ~ Bilingualism , var = "dA"))
+car::Anova(a1) 
+effectsize(a1)
+```
+
+```{r}
+a1<-lmer(WhiteSurfArea_area ~  A0 * dA * Bilingualism  * Ethnicity + Gender + EducationYears + eTIV + (1|Med_ID), data = data_subset_Didac)
+test(emtrends(a1, ~ Bilingualism , var = "dA"))
+car::Anova(a1) 
+effectsize(a1)
+```
+
+```{r}
+a1<-lmer(MeanThickness_thickness ~  A0 * dA * Bilingualism  * Ethnicity + Gender + EducationYears + eTIV + (1|Med_ID), data = data_subset_Didac)
+test(emtrends(a1, ~ Bilingualism , var = "dA"))
+car::Anova(a1) 
+effectsize(a1)
+```
+
+```{r}
+a1<-lmer(WM_hypo_z ~  A0 * dA * Bilingualism  * Ethnicity + Gender + EducationYears + eTIV + (1|Med_ID), data = data_subset_Didac)
+test(emtrends(a1, ~ Bilingualism , var = "dA"))
+car::Anova(a1) 
+effectsize(a1)
+```
+
+```{r}
+data_subset_Didac <- data_subset_Didac %>%
+  mutate(A0_group = ifelse(A0 <= median(A0, na.rm = TRUE), "Young", "Old"),
+         A0_group = factor(A0_group, levels = c("Young", "Old"))) 
+
+a1<-lmer(WM_hypo_z ~  A0_group * dA * Bilingualism  * Ethnicity + Gender + EducationYears + eTIV + (1|Med_ID), data = data_subset_Didac)
+car::Anova(a1)
+test(emtrends(a1, ~ A0_group * Bilingualism , var = "dA"))
+```
+
+
+```{r}
+ # 1. Fit the model
+m1 <- lmer(WhiteSurfArea_area ~ A0 * dA * Bilingualism  * Ethnicity + Gender+ EducationYears + eTIV + (1|Med_ID),
+           data = data_subset_Didac)
+
+
+# 3. Get adjusted predictions for dA × Ethnicity, limiting dA to <= 6
+pred <- emmeans(m1, ~ dA * Bilingualism,
+                at = list(dA = seq(min(data_subset_Didac$dA),
+                                   max(data_subset_Didac$dA),
+                                   length.out = 50)))
+pred_df <- as.data.frame(pred)
+pred_df <- as.data.frame(summary(pred, infer = c(TRUE, TRUE)))
+
+# 4. Plot
+ggplot() +
+  # Raw participant trajectories
+  geom_line(data = data_subset_Didac,
+            aes(x = dA, y = WhiteSurfArea_area, group = Med_ID),
+            color = "orange", linetype = "dotted", alpha = 0.5) +
+  geom_point(data = data_subset_Didac,
+             aes(x = dA, y = WhiteSurfArea_area),
+             color = "orange", alpha = 0.5, size = 1.5) +
+  # Model-predicted lines
+  geom_line(data = pred_df,
+            aes(x = dA, y = emmean, color = Bilingualism),
+            size = 1.2) +
+  # Confidence ribbons
+  geom_ribbon(data = pred_df,
+              aes(x = dA, ymin = asymp.LCL, ymax = asymp.UCL, fill = Bilingualism),
+              alpha = 0.2, inherit.aes = FALSE) +
+  # Labels
+  labs(
+    x = "Time Differences between Visits (dA)",
+    y = "WhiteSurfArea_area (adjusted)",
+    title = "WhiteSurfArea_area Trajectories by Bilingualism",
+    subtitle = "Orange dots: individual raw data; Solid lines: model predictions"
+  ) +
+  scale_color_brewer(palette = "Set1") +
+  scale_fill_brewer(palette = "Set1") +
+  theme_minimal() +
+   theme_bw() +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16, family = "serif"),
+    plot.subtitle = element_text(face = "plain", hjust = 0.5, size = 14, family = "serif"),
+    legend.position = "top",
+    legend.title = element_text(size = 14, family = "serif"),
+    legend.text = element_text(size = 14, family = "serif"),
+    axis.title.x = element_text(size = 14, family = "serif"),
+    axis.title.y = element_text(size = 14, family = "serif"),
+    axis.text.x = element_text(size = 13, family = "serif"),  
+    axis.text.y = element_text(size = 13, family = "serif"),
+    strip.text = element_text(size = 14, family = "serif")
+  )
+```
+
+```{r}
+# 1. Create A0_group and filter dA <= 6
+data_subset_Didac <- data_subset_Didac %>%
+  mutate(A0_group = ifelse(A0 <= median(A0, na.rm = TRUE), "Young", "Old"),
+         A0_group = factor(A0_group, levels = c("Young", "Old"))) %>%
+  filter(dA <= 6)
+
+# 2. Fit model including A0_group
+m2 <- lmer(
+  WM_hypo_z ~ A0_group * dA * Bilingualism  * Ethnicity + Gender+ EducationYears + eTIV + (1|Med_ID),
+           data = data_subset_Didac)
+
+# 3. Generate predictions (collapse across gender, include A0_group for prediction)
+pred <- emmeans(
+  m2,
+  ~ dA * Bilingualism | A0_group,
+  at = list(
+    dA = seq(min(data_subset_Didac$dA), max(data_subset_Didac$dA), length.out = 50),
+    EducationYears = mean(data_subset_Didac$EducationYears, na.rm = TRUE),
+    Gender = "Female",       # reference level
+    Ethnicity = "Hispanic"
+  ),
+  type = "response"
+)
+
+pred_df <- as.data.frame(confint(pred, level = 0.95))
+
+head(pred_df)
+ggplot() +
+  # Raw participant data
+  geom_line(data = data_subset_Didac,
+            aes(x = dA, y = WM_hypo_z, group = Med_ID),
+            color = "orange", linetype = "dotted", alpha = 0.4) +
+  geom_point(data = data_subset_Didac,
+             aes(x = dA, y = WM_hypo_z),
+             color = "orange", alpha = 0.4, size = 1.2) +
+  
+  # Model predictions
+  geom_line(data = pred_df,
+            aes(x = dA, y = emmean, color = Bilingualism, linetype = A0_group),
+            size = 1.2) +
+  
+  # Confidence ribbons
+  geom_ribbon(data = pred_df,
+              aes(x = dA, ymin = asymp.LCL, ymax = asymp.UCL,
+                  fill = Bilingualism, group = interaction(Bilingualism, A0_group)),
+              alpha = 0.15, inherit.aes = FALSE) +
+  
+  # Labels
+  labs(
+    x = "Time Differences between Visits (dA)",
+    y = "WM_hypo_z (adjusted)",
+    title = "WM_hypo_z Trajectories by Bilingualism and Baseline Age",
+    subtitle = "Orange dots: individual raw data; Solid lines: model predictions"
+  ) +
+  
+  # Color/fill
+  scale_color_brewer(palette = "Set1") +
+  scale_fill_brewer(palette = "Set1") +
+  
+  # Theme
+  theme_minimal() +
+  theme_bw() +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16, family = "serif"),
+    plot.subtitle = element_text(face = "plain", hjust = 0.5, size = 14, family = "serif"),
+    legend.position = "top",
+    legend.title = element_text(size = 14, family = "serif"),
+    legend.text = element_text(size = 14, family = "serif"),
+    axis.title.x = element_text(size = 14, family = "serif"),
+    axis.title.y = element_text(size = 14, family = "serif"),
+    axis.text.x = element_text(size = 13, family = "serif"),  
+    axis.text.y = element_text(size = 13, family = "serif"),
+    strip.text = element_text(size = 14, family = "serif")
+  )
+
+```
+
